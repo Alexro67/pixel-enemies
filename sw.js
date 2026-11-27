@@ -1,4 +1,4 @@
-const CACHE = 'pixel-enemies-v11';
+const CACHE = 'pixel-enemies-v12';
 const FILES = ['./', 'index.html', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png',
   'lib/phaser.min.js', 'src/map.js', 'src/tiles.js', 'src/units.js', 'src/rules.js', 'src/game.js',
   'src/online-config.js', 'src/online.js'];

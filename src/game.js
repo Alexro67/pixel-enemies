@@ -262,8 +262,9 @@
 
     // --- Tropas en pantalla -------------------------------------------------
     unitPos(col, row) {
-      const o = T.tileOrigin(col, row);
-      return { x: o.x + T.W / 2, y: o.y + T.TOP + T.H / 2 + 9 };
+      const o = T.tileOrigin(col, row), t = M.tileAt(state.map, col, row);
+      const sea = t && (t.terrain === 'costa' || t.terrain === 'mar') && RELIEF ? T.WATER_DROP : 0; // en el mar, un poco más abajo
+      return { x: o.x + T.W / 2, y: o.y + T.TOP + T.H / 2 + 9 + sea };
     }
     drawUnits() {
       const game = state.game, alive = new Set(game.units.map(u => u.id));
@@ -279,6 +280,11 @@
           const ring = this.add.ellipse(0, -2, 26, 9).setStrokeStyle(2, Phaser.Display.Color.HexStringToColor(FACTION_COLORS[factionOf(u.owner)]).color, 0.95);
           v.add([ring, img, hp]);
           v.img = img; v.hp = hp;
+          if (R.isShip(u)) { // cuántas tropas lleva a bordo
+            v.cargo = this.add.text(-14, -30, '', { fontFamily: 'monospace', fontStyle: 'bold', fontSize: '10px', color: '#ffffff',
+              backgroundColor: '#3a2a1a', padding: { x: 2, y: 0 } }).setResolution(6).setOrigin(0.5, 0.5);
+            v.add(v.cargo);
+          }
           this.layer.add(v);
           this.unitViews.set(u.id, v);
         }
@@ -291,6 +297,9 @@
     refreshUnit(u) {
       const v = this.unitViews.get(u.id), game = state.game;
       if (!v) return;
+      // Las tropas que van en un barco no se ven: el barco enseña cuántas lleva.
+      if (u.aboard) { const p = this.unitPos(u.col, u.row); v.setPosition(p.x, p.y).setVisible(false); return; }
+      if (v.cargo) { const n = R.passengers(game, u).length; v.cargo.setText(n ? `👤${n}` : '').setVisible(n > 0); }
       v.hp.setText(String(u.hp));
       v.hp.setColor(R.weak(u) ? '#ff7a6a' : u.hp < R.UNITS[u.type].hp ? '#ffe08a' : '#ffffff');
       // Las tropas del jugador que ya no pueden hacer nada se ven apagadas.
@@ -346,7 +355,7 @@
         this.moves = R.reachable(game, map, u);
         for (const m of this.moves.values()) {
           const o = T.tileOrigin(m.col, m.row);
-          const img = this.add.image(o.x, o.y, 'hl_move').setOrigin(0, 0).setDepth(m.row + 0.5);
+          const img = this.add.image(o.x, this.tileY(M.tileAt(map, m.col, m.row)), 'hl_move').setOrigin(0, 0).setDepth(m.row + 0.5);
           this.layer.add(img); this.hlLayer.push(img);
         }
         // Colono: una banderita en las casillas azules donde podría fundar.
@@ -361,7 +370,7 @@
         this.targets = R.targets(game, u).filter(e => !this.isHidden(e.col, e.row));
         for (const e of this.targets) {
           const o = T.tileOrigin(e.col, e.row), pv = R.preview(game, map, u, e);
-          const img = this.add.image(o.x, o.y, 'hl_attack').setOrigin(0, 0).setDepth(e.row + 0.5);
+          const img = this.add.image(o.x, this.tileY(M.tileAt(map, e.col, e.row)), 'hl_attack').setOrigin(0, 0).setDepth(e.row + 0.5);
           // Cuánto le quitarías (y cuánto te devolvería), antes de atacar.
           const txt = this.add.text(o.x + T.W / 2 - 14, o.y + T.TOP + T.H - 12, `-${pv.dealt}` + (pv.back ? ` ↩${pv.back}` : ''),
             { fontFamily: 'monospace', fontStyle: 'bold', fontSize: '10px', color: '#ffe0d8', stroke: '#5a0d08', strokeThickness: 3 })
@@ -390,6 +399,7 @@
       const path = this.order({ a: 'move', u: u.id, col: dest.col, row: dest.row });
       if (!path) { this.busy = false; return; }
       const v = this.unitViews.get(u.id);
+      if (!u.aboard && !v.visible && !this.isHidden(path[0].col, path[0].row)) v.setVisible(true); // baja del barco
       for (const step of path) {
         const p = this.unitPos(step.col, step.row);
         if (p.x !== v.x) v.img.setFlipX(p.x < v.x);
@@ -402,7 +412,11 @@
       this.applyFog();
       saveGame();
       this.busy = false;
-      if (this.replaying) { ui.say(`${unitName(u)} se mueve.`); return; }
+      const ship = R.shipOf(state.game, u);
+      if (ship) { this.drawUnits(); this.refreshAll(); }
+      if (this.replaying) { ui.say(ship ? `${unitName(u)} sube a ${R.UNITS[ship.type].label.toLowerCase()}.` : `${unitName(u)} se mueve.`); return; }
+      if (ship) { this.selectUnit(null); ui.say(`${R.UNITS[u.type].label} sube a ${R.UNITS[ship.type].label.toLowerCase()}. Mueve el barco y, en otro turno, baja la tropa a tierra.`); return; }
+      if (u.landed && !this.isHidden(u.col, u.row)) { this.selectUnit(null); ui.say(`${R.UNITS[u.type].label} baja a tierra. Este turno ya no puede atacar.`); return; }
       // Si después de moverse puede atacar, se queda seleccionada.
       if (R.targets(state.game, u).some(e => !this.isHidden(e.col, e.row))) this.selectUnit(u);
       else { this.selectUnit(null); ui.say(`${R.UNITS[u.type].label} se ha movido.`); }
@@ -434,7 +448,8 @@
       const again = !this.replaying && att.hp > 0 && state.game.winner === null && result.kills && R.targets(state.game, att).some(e => !this.isHidden(e.col, e.row));
       this.selectUnit(canLeave || again ? att : null);
       let msg = `${unitName(att)} ataca al ${unitName(def)} y le quita ${result.dealt}.`;
-      if (result.kills) msg += ' ¡Lo elimina!';
+      if (result.kills) msg += R.isShip(def) ? ' ¡Lo hunde!' : ' ¡Lo elimina!';
+      if (result.drowned) msg += ` Se hunden con él ${result.drowned} tropa${result.drowned > 1 ? 's' : ''} que llevaba.`;
       else if (result.back) msg += ` Contraataque: le devuelve ${result.back}` + (result.dies ? ' y lo elimina.' : '.');
       if (canLeave) msg += ' Aún puede moverse.';
       if (again) msg += ' ¡Implacable: puede volver a atacar!';
@@ -543,6 +558,7 @@
     }
     doDismiss(u) {
       const name = unitName(u);
+      if (R.isShip(u) && R.passengers(state.game, u).length) { ui.say('Primero baja a tierra a las tropas que lleva.'); return; }
       if (!this.order({ a: 'despedir', u: u.id })) return;
       this.drawUnits(); this.applyFog(); saveGame();
       this.selectUnit(null);
@@ -809,7 +825,7 @@
     unitUnder(w) {
       let best = null;
       for (const u of state.game.units) {
-        if (this.isHidden(u.col, u.row)) continue;
+        if (u.aboard || this.isHidden(u.col, u.row)) continue;
         const p = this.unitPos(u.col, u.row);
         if (Math.abs(w.x - p.x) <= 14 && w.y <= p.y + 2 && w.y >= p.y - 34 && (!best || u.row > best.row)) best = u;
       }
@@ -914,11 +930,18 @@
       txt += ` · Ve a ${R.visionOf(map, u)}`;
       txt += ` · ${R.CLASSES[s.cls].label}` + s.skills.map(k => ` · ${R.SKILLS[k].label}: ${R.SKILLS[k].text}`).join('');
       if (R.weak(u)) txt += ' · Herido: pega 1 menos';
+      if (s.sea) txt += ` · Navega por ${s.sea.map(k => M.TERRAIN[k].label.toLowerCase()).join(' y ')}` + (s.carry ? ` · Lleva ${s.carry} tropa${s.carry > 1 ? 's' : ''}` : ' · No lleva tropas');
+      const ship = R.shipOf(g, u), crew = R.isShip(u) ? R.passengers(g, u) : [];
+      if (ship) txt = `A bordo de ${R.UNITS[ship.type].label.toLowerCase()}` + (u.owner === g.turn ? (u.moved ? ': podrá bajar a tierra en tu próximo turno' : ': toca una casilla azul de tierra para bajar') : '') + ` · ${txt}`;
+      if (crew.length) txt += ` · A bordo: ${crew.map(x => R.UNITS[x.type].label).join(', ')}`;
       const actions = [], sc = window.PEGame;
+      // Desde el barco se elige a la tropa de a bordo (para bajarla a tierra o curarla).
+      if (u.owner === g.turn) crew.forEach(x => actions.push({ label: `${R.UNITS[x.type].label} a bordo${x.moved ? '' : ': bajar'}`, main: !x.moved, onClick: () => sc.selectUnit(x) }));
+      if (ship && u.owner === g.turn) actions.push({ label: `Volver al barco`, onClick: () => sc.selectUnit(ship) });
       if (u.owner === g.turn) {
         const canMove = sc.moves && sc.moves.size, canHit = sc.targets && sc.targets.length;
         if (canMove && canHit) txt += '. Azul: moverse. Rojo: atacar.';
-        else if (canMove) txt += '. Toca una casilla azul para moverte.';
+        else if (canMove && !ship) txt += '. Toca una casilla azul para moverte.';
         else if (canHit || (sc.structTargets && sc.structTargets.length)) txt += '. Toca un enemigo en rojo para atacar.';
         else if (!R.canDoSomething(g, map, u)) txt += '. Ya ha hecho todo este turno.';
         if (u.type === 'colono') {
@@ -966,16 +989,18 @@
       if (city) { ui.onCity(city); return; }
       const g = R.GROUND[t.terrain];
       let txt = M.TERRAIN[t.terrain].label;
-      if (!g.walk) txt += ' · Las tropas de tierra no pueden entrar';
+      if (!g.walk) txt += t.terrain === 'mar' ? ' · Solo para carabelas y galeones' : ' · Solo para barcos (las tropas de tierra suben a uno tuyo)';
       else {
         if (g.stop) txt += ' · Al entrar se acaba el movimiento';
         if (t.terrain === 'montana') txt += ' · Desde aquí se ve a 2 casillas';
+        if (t.terrain === 'rio') txt += ' · Las barcas también navegan por aquí';
         const parts = Object.values(R.CLASSES).map(c => { const b = c.terrain[t.terrain] || 0; return b ? `${c.label} ${b > 0 ? '+' : ''}${b}` : null; }).filter(Boolean);
         if (parts.length) txt += ` · Defensa: ${parts.join(', ')}`;
       }
       const b = gm.buildings[R.key(t.col, t.row)];
       if (gm.roads[R.key(t.col, t.row)]) txt += t.terrain === 'rio' ? ' · Puente' : ' · Camino';
-      if (b) txt += ` · ${R.BUILDINGS[b].label}: ${R.givesText(R.buildingGives(gm, map, t))} por turno`;
+      if (b && !Object.keys(R.BUILDINGS[b].gives).length && !R.BUILDINGS[b].big) txt += ` · ${R.BUILDINGS[b].label}: ${R.BUILDINGS[b].extra}`;
+      else if (b) txt += ` · ${R.BUILDINGS[b].label}: ${R.givesText(R.buildingGives(gm, map, t))} por turno` + (R.BUILDINGS[b].dock ? ` (${R.BUILDINGS[b].extra})` : '');
       else if (t.resource) { const r = M.RESOURCE[t.resource]; txt += ` · ${r.label} (${r.kind})`; }
       if (b && R.BUILDINGS[b].big) txt += ` (${R.BUILDINGS[b].extra})`;
       const st = R.structAt(gm, t.col, t.row);
@@ -989,7 +1014,7 @@
         const bd = R.BUILDINGS[opt.type];
         const locked = bd.tech && !R.hasTech(gm, gm.turn, bd.tech);
         actions.push({ label: `${bd.label} (${opt.cost} oro)` + (locked ? ' 🔒' : ''), main: !opt.problem, disabled: !!opt.problem, onClick: () => sc.doBuild(t) });
-        txt += ` · ${bd.label}: ${R.givesText(bd.gives)} por turno` + (bd.extra ? ` (${bd.extra})` : '');
+        txt += Object.keys(bd.gives).length ? ` · ${bd.label}: ${R.givesText(bd.gives)} por turno` + (bd.extra ? ` (${bd.extra})` : '') : ` · ${bd.label}: ${bd.extra}`;
         if (opt.problem) txt += ` · ${opt.problem}`;
       } else if (bigs.length) {
         // Edificios grandes: solo se enseñan los que ya puedes investigar o tienes.
@@ -1062,7 +1087,9 @@
           const problem = R.recruitProblem(g, map, c, type);
           return { label: `${R.UNITS[type].label} (${R.UNITS[type].cost} comida)`, disabled: !!problem, onClick: () => sc.doRecruit(c, type), problem };
         });
-        const blocked = list.find(x => x.problem && !/comida|Solo se recluta/.test(x.problem)) || list.find(x => x.problem && /Solo se recluta/.test(x.problem));
+        const blocked = list.find(x => x.problem && !/comida|Solo se recluta|muelle/.test(x.problem)) || list.find(x => x.problem && /Solo se recluta/.test(x.problem));
+        const dockless = list.find(x => x.problem && /muelle/.test(x.problem));
+        if (dockless && !blocked) txt += ` · Barcos: ${dockless.problem}`;
         if (blocked) txt += ` · Reclutar: ${blocked.problem}`;
         ui.setActions(upgrades.concat(list));
       }
