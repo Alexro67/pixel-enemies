@@ -80,6 +80,9 @@
       arrow.rect(0, 1, 9, 1, '#6b4426'); arrow.rect(9, 0, 2, 3, '#c9ced6'); arrow.set(11, 1, '#e4e8ee');
       arrow.set(0, 0, '#f4f0e0'); arrow.set(0, 2, '#f4f0e0');
       this.addTex('arrow', arrow.done());
+      const ball = new T.Pix(6, 6);
+      ball.ellipse(3, 3, 2.8, 2.8, null, (u, v) => (u + v < -0.4 ? '#c9ced6' : '#4a4e56'));
+      this.addTex('ball', ball.done());
     }
     // Al alejar el zoom, suaviza (se ve mejor); al acercar, píxeles nítidos.
     addTex(key, canvas) {
@@ -378,18 +381,21 @@
       this.busy = false;
       // Un hostigador que aún no se ha movido puede irse después de atacar.
       const canLeave = !this.replaying && att.hp > 0 && state.game.winner === null && R.reachable(state.game, state.map, att).size > 0;
-      this.selectUnit(canLeave ? att : null);
+      const again = !this.replaying && att.hp > 0 && state.game.winner === null && result.kills && R.targets(state.game, att).some(e => !this.isHidden(e.col, e.row));
+      this.selectUnit(canLeave || again ? att : null);
       let msg = `${unitName(att)} ataca al ${unitName(def)} y le quita ${result.dealt}.`;
       if (result.kills) msg += ' ¡Lo elimina!';
       else if (result.back) msg += ` Contraataque: le devuelve ${result.back}` + (result.dies ? ' y lo elimina.' : '.');
       if (canLeave) msg += ' Aún puede moverse.';
+      if (again) msg += ' ¡Implacable: puede volver a atacar!';
       ui.say(msg);
       if (state.game.winner !== null && !this.replaying) ui.showWinner();
     }
     // Un golpe: el atacante se lanza (o dispara una flecha) y sale el daño flotando.
     async strike(from, to, ranged, dmg) {
       if (ranged) {
-        const a = this.add.image(from.x, from.y - 18, 'arrow').setDepth(9999);
+        const ball = R.UNITS[(this.unitTypeOf(from) || 'arquero')].cls === 'maquina';
+        const a = this.add.image(from.x, from.y - 18, ball ? 'ball' : 'arrow').setDepth(9999);
         a.setRotation(Math.atan2(to.y - from.y, to.x - from.x));
         this.layer.add(a);
         await this.tween({ targets: a, x: to.x, y: to.y - 16, duration: 260, ease: 'Quad.easeIn' });
@@ -407,6 +413,7 @@
       this.tween({ targets: t, y: t.y - 16, alpha: 0, delay: 350, duration: 500 }).then(() => t.destroy());
       await this.wait(260);
     }
+    unitTypeOf(view) { for (const [id, v] of this.unitViews) if (v === view) { const u = R.unitById(state.game, id); return u && u.type; } return null; }
     tween(cfg) { return new Promise(res => this.tweens.add({ ...cfg, onComplete: () => res() })); }
     wait(ms) { return new Promise(res => this.time.delayedCall(ms, res)); }
 
@@ -469,6 +476,29 @@
       this.selectUnit(null);
       ui.say(`${R.UNITS[type].label} reclutado en ${cityName(city)}. Podrá moverse en tu próximo turno.`);
     }
+    // Monje: cura a las tropas de al lado.
+    async doBless(u) {
+      const healed = this.order({ a: 'sanar', u: u.id });
+      if (!healed) return;
+      for (const h of healed) {
+        const x = R.unitById(state.game, h.id), v = this.unitViews.get(h.id);
+        if (!x || !v) continue;
+        this.refreshUnit(x);
+        const t = this.add.text(v.x, v.y - 40, `+${h.n}`, { fontFamily: 'monospace', fontStyle: 'bold', fontSize: '14px',
+          color: '#7dff8a', stroke: '#0a1a08', strokeThickness: 4 }).setResolution(6).setOrigin(0.5).setDepth(9999);
+        this.layer.add(t);
+        this.tween({ targets: t, y: t.y - 16, alpha: 0, delay: 350, duration: 500 }).then(() => t.destroy());
+      }
+      this.refreshUnit(u); saveGame();
+      this.selectUnit(null);
+      ui.say(`${unitName(u)} cura a ${healed.length} tropa${healed.length > 1 ? 's' : ''} de al lado.`);
+      await this.wait(300);
+    }
+    doTech(id) {
+      if (!this.order({ a: 'tech', id })) return false;
+      saveGame(); ui.refreshRes();
+      return true;
+    }
     doHeal(u) {
       const n = this.order({ a: 'heal', u: u.id });
       if (!n) return;
@@ -506,6 +536,8 @@
         else if (o.a === 'road') this.doRoad(M.tileAt(state.map, o.col, o.row));
         else if (o.a === 'recruit' && c) this.doRecruit(c, o.type);
         else if (o.a === 'heal' && u) this.doHeal(u);
+        else if (o.a === 'sanar' && u) await this.doBless(u);
+        else if (o.a === 'tech') R.perform(state.game, state.map, o); // las tecnologías de los demás no se ven
         else if (c) this.doCity(c, o.a);
         else if (o.a === 'end') R.perform(state.game, state.map, o);
         this.busy = true;
@@ -678,7 +710,7 @@
   const ui = {
     topHeight() { return $('topbar').offsetHeight; },
     bottomHeight() { return $('bottombar').offsetHeight; },
-    overlayOpen() { return !$('ov-box').parentNode.hidden; },
+    overlayOpen() { return !$('ov-box').parentNode.hidden || !$('tech').hidden; },
     onMap(map) {
       $('code').textContent = map.seed;
       $('size').value = state.size;
@@ -753,6 +785,11 @@
           else head = `Aquí no se puede fundar: ${problem}${where}`;
           txt = `${head} · ${txt}`;
         }
+        if (R.has(u, 'sanador')) {
+          const problem = R.blessProblem(g, map, u);
+          actions.push({ label: 'Curar a los de al lado', main: !problem, disabled: !!problem, onClick: () => sc.doBless(u) });
+          if (problem && !u.acted) txt += ` · ${problem}`;
+        }
         if (u.hp < s.hp) {
           const problem = R.healProblem(g, map, u);
           actions.push({ label: `Curar +${R.healAmount(g, u)} (${R.ECON.healCost} comida)`, disabled: !!problem, onClick: () => sc.doHeal(u) });
@@ -788,7 +825,8 @@
       const opt = R.buildOption(gm, map, t), actions = [];
       if (opt) {
         const bd = R.BUILDINGS[opt.type];
-        actions.push({ label: `${bd.label} (${bd.cost} oro)`, main: !opt.problem, disabled: !!opt.problem, onClick: () => window.PEGame.doBuild(t) });
+        const locked = bd.tech && !R.hasTech(gm, gm.turn, bd.tech);
+        actions.push({ label: `${bd.label} (${bd.cost} oro)` + (locked ? ' 🔒' : ''), main: !opt.problem, disabled: !!opt.problem, onClick: () => window.PEGame.doBuild(t) });
         txt += ` · ${bd.label}: ${R.givesText(bd.gives)} por turno` + (bd.extra ? ` (${bd.extra})` : '');
         if (opt.problem) txt += ` · ${opt.problem}`;
       } else if (!b && owner && owner.owner === gm.turn && !R.buildingFor(t) && t.terrain !== 'mar' && t.terrain !== 'costa') {
@@ -796,7 +834,7 @@
       }
       if (R.canOfferRoad(gm, map, t)) {
         const problem = R.roadProblem(gm, map, t);
-        actions.push({ label: `${t.terrain === 'rio' ? 'Puente' : 'Camino'} (${R.ECON.roadCost} oro)`, disabled: !!problem, onClick: () => window.PEGame.doRoad(t) });
+        actions.push({ label: `${t.terrain === 'rio' ? 'Puente' : 'Camino'} (${R.ECON.roadCost} oro)` + (R.hasTech(gm, gm.turn, 'caza') ? '' : ' 🔒'), disabled: !!problem, onClick: () => window.PEGame.doRoad(t) });
         if (problem && !opt) txt += ` · ${problem}`;
       }
       ui.setActions(actions);
@@ -819,9 +857,10 @@
         const upgrades = [];
         if (lvl < E.maxLevel) upgrades.push({ label: `Subir a nivel ${lvl + 1} (${E.levelCost(lvl)} oro)`, main: !lvlProblem, disabled: !!lvlProblem, onClick: () => sc.doCity(c, 'nivel') });
         if (!c.expanded) upgrades.push({ label: `Ampliar territorio (${E.expandCost} oro)`, disabled: !!R.expandProblem(g, map, c), onClick: () => sc.doCity(c, 'ampliar') });
-        if (!c.fort) upgrades.push({ label: `Fortificar (${E.fortCost} oro)`, disabled: !!R.fortProblem(g, map, c), onClick: () => sc.doCity(c, 'fortificar') });
+        if (!c.fort) upgrades.push({ label: `Fortificar (${E.fortCost} oro)` + (R.hasTech(g, c.owner, 'fortificacion') ? '' : ' 🔒'), disabled: !!R.fortProblem(g, map, c), onClick: () => sc.doCity(c, 'fortificar') });
         if (!c.expanded && lvl < E.expandLevel) txt += ` · Podrá ampliar su territorio al llegar a nivel ${E.expandLevel}.`;
-        const list = R.RECRUITABLE.map(type => {
+        // Solo se enseñan las tropas que ya tienes (las demás salen al investigar).
+        const list = R.RECRUITABLE.filter(type => !R.UNITS[type].tech || R.hasTech(g, c.owner, R.UNITS[type].tech)).map(type => {
           const problem = R.recruitProblem(g, map, c, type);
           return { label: `${R.UNITS[type].label} (${R.UNITS[type].cost} comida)`, disabled: !!problem, onClick: () => sc.doRecruit(c, type), problem };
         });
@@ -830,6 +869,54 @@
         ui.setActions(upgrades.concat(list));
       }
       ui.say(txt);
+    },
+    // --- Árbol de tecnologías ---------------------------------------------
+    // Ves solo las tuyas. En tu turno puedes investigar; si no, solo mirar.
+    showTechs(selected) {
+      const g = state.game, who = state.me === null ? g.turn : state.me, p = g.players[who];
+      const canAct = window.PEGame.myTurn() && g.turn === who && g.winner === null;
+      const box = $('tech-box');
+      const esc = (x) => String(x).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]);
+      let html = `<h2>Tecnologías de ${esc(nameOf(who))}</h2><p class="small">Oro ${p.gold} · Tienes ${p.techs.length} de ${Object.keys(R.TECHS).length}.`
+        + ' En cada rama se va en orden, y desde el nivel 2 hace falta una ciudad de ese nivel.</p>';
+      for (const b of R.BRANCHES) {
+        html += `<div class="tb"><h3>${b.label}</h3><div class="cards">`;
+        for (const id of R.techsOfBranch(b.id)) {
+          const t = R.TECHS[id], have = R.hasTech(g, who, id), problem = R.techProblem(g, who, id);
+          const poorOnly = problem && /oro/.test(problem) && !/necesitas|antes/i.test(problem);
+          const cls = have ? 'have' : !problem ? 'can' : poorOnly ? 'can poor' : '';
+          const st = have ? '✓ Tuya' : (problem && !poorOnly ? '🔒 ' : '') + `${R.techCost(g, who, id)} oro`;
+          html += `<button class="tc ${cls}${id === selected ? ' sel' : ''}" data-id="${id}"><b>${esc(t.label)}</b><span>Nivel ${t.level}</span><span class="st">${st}</span></button>`;
+        }
+        html += '</div></div>';
+      }
+      html += '<div id="tech-detail"></div>';
+      box.innerHTML = html;
+      const detail = $('tech-detail');
+      const show = (id) => {
+        let d = '';
+        if (id) {
+          const t = R.TECHS[id], have = R.hasTech(g, who, id), problem = R.techProblem(g, who, id);
+          d = `<b>${esc(t.label)}</b> (${R.branchLabel(id)}, nivel ${t.level}): ${esc(t.text)}.` + (t.later ? ' <i>Esto llega más adelante en el juego.</i>' : '');
+          if (have) d += '<br>✓ Ya la tienes.';
+          else if (problem && (canAct || !/turno/.test(problem))) d += `<br>${esc(problem)}`;
+          else if (!canAct) d += '<br>Podrás investigarla en tu turno.';
+        } else d = 'Toca una tecnología para ver qué da.';
+        d += '<div class="row">';
+        if (id && canAct && !R.techProblem(g, who, id)) d += `<button class="main" id="tech-go">Investigar (${R.techCost(g, who, id)} oro)</button>`;
+        d += '<button id="tech-close">Cerrar</button></div>';
+        detail.innerHTML = d;
+        $('tech-close').onclick = () => { $('tech').hidden = true; };
+        if ($('tech-go')) $('tech-go').onclick = () => {
+          if (window.PEGame.busy || !window.PEGame.doTech(id)) return;
+          ui.showTechs(id);
+          $('tech-detail').insertAdjacentHTML('afterbegin', `<div>¡Investigada ${esc(R.TECHS[id].label)}!</div>`);
+          ui.say(`Has investigado ${R.TECHS[id].label}: ${R.TECHS[id].text}.`);
+        };
+      };
+      box.querySelectorAll('.tc').forEach(el => { el.onclick = () => ui.showTechs(el.dataset.id); });
+      show(selected);
+      $('tech').hidden = false;
     },
     // Pantalla que tapa el mapa para pasar el móvil al otro jugador.
     showHandover(first) {
@@ -915,6 +1002,7 @@
     $('armies').onchange = onMenu('armies', true);
     $('fog').onclick = () => { state.fog = !state.fog; $('fog').classList.toggle('on', state.fog); window.PEGame.selectUnit(null); window.PEGame.applyFog(); };
     $('end').onclick = () => window.PEGame.endTurn();
+    $('techs').onclick = () => { if (state.game && !(window.PEGame && window.PEGame.replaying)) ui.showTechs(); };
     $('code').onclick = () => {
       ui.overlay('Código de mapa', 'Escribe el código de un mapa para jugar en él. Empieza una partida nueva.', 'Jugar en ese mapa', '#4a3563',
         (c) => { if (c && c.trim()) window.PEGame.startGame({ seed: c.trim().toUpperCase().slice(0, 12) }); },

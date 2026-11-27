@@ -86,6 +86,28 @@
   #net-toast{position:fixed;z-index:30;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom));
     background:#120c18;border:2px solid #f4e9c9;padding:8px 12px;font-size:13px;max-width:85vw;text-align:center;}
   #net-toast[hidden]{display:none;}
+  /* Tecnologías */
+  #techs{background:#2f5a6a;box-shadow:inset -2px -2px 0 #1d3a45,inset 2px 2px 0 #4f8a9a;font-weight:bold;}
+  #tech{position:fixed;inset:0;z-index:15;overflow-y:auto;background:rgba(26,18,36,.96);padding:calc(12px + env(safe-area-inset-top)) 10px 20px;}
+  #tech[hidden]{display:none;}
+  #tech-box{max-width:520px;margin:0 auto;}
+  #tech h2{font-size:20px;margin:0 0 4px;text-align:center;text-shadow:2px 2px 0 #000;}
+  #tech .small{font-size:12px;opacity:.85;text-align:center;margin:0 0 10px;}
+  .tb{margin:0 0 10px;}
+  .tb h3{font-size:13px;margin:0 0 4px;letter-spacing:1px;}
+  .tb .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;}
+  .tc{display:flex;flex-direction:column;gap:2px;align-items:flex-start;text-align:left;min-height:62px;padding:5px;font-size:11px;line-height:1.2;
+    background:#3a2a4c;opacity:.6;}
+  .tc b{font-size:12px;}
+  .tc .st{margin-top:auto;font-size:11px;}
+  .tc.have{background:#2f6a3a;opacity:1;box-shadow:inset -2px -2px 0 #1d4f25,inset 2px 2px 0 #4fa85c;}
+  .tc.can{background:#7a5a1a;opacity:1;box-shadow:inset -2px -2px 0 #4a3510,inset 2px 2px 0 #b08a3a;}
+  .tc.poor{opacity:.85;}
+  .tc.sel{outline:3px solid #fff6c8;outline-offset:-1px;}
+  #tech-detail{position:sticky;bottom:0;background:#2b1d3a;border:3px solid #120c18;padding:10px;font-size:13px;line-height:1.4;margin-top:6px;}
+  #tech-detail .row{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:8px;}
+  #tech-detail button{font-size:14px;padding:8px 12px;}
+  #tech-detail button.main{background:#2f7a3a;box-shadow:inset -2px -2px 0 #1d4f25,inset 2px 2px 0 #4fa85c;font-weight:bold;}
 </style>
 </head>
 <body>
@@ -107,12 +129,14 @@
   <span id="turn">Ronda 1</span>
   <span id="gold" class="res">Oro 0</span>
   <span id="food" class="res">Comida 0</span>
+  <button id="techs">Tecnologías</button>
   <span id="spacer"></span>
   <button id="code" title="Código del mapa">------</button>
   <button id="end">Pasar turno</button>
   <span id="info"></span>
   <div id="actions" hidden></div>
 </div>
+<div id="tech" hidden><div id="tech-box"></div></div>
 <div id="overlay" hidden>
   <div id="ov-box">
     <h2 id="ov-title"></h2>

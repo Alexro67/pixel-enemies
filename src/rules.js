@@ -15,6 +15,9 @@
     hostigador:  { label: 'Hostigador', text: 'puede moverse después de atacar' },
     explorador:  { label: 'Explorador', text: 've a 2 casillas' },
     civil:       { label: 'Civil', text: 'no ataca ni contraataca' },
+    antiMontada: { label: 'Antijinetes', text: '+2 de defensa contra tropas montadas' },
+    implacable:  { label: 'Implacable', text: 'si mata, puede volver a atacar' },
+    sanador:     { label: 'Sanador', text: 'en vez de atacar, cura 3 de vida a tus tropas de al lado' },
   };
   // Visión: todas ven 1 casilla alrededor; 2 si son exploradoras o están en una montaña.
   // Defensa extra según el terreno, por clase de tropa. El río resta a todos.
@@ -22,9 +25,45 @@
     infanteria: { label: 'Infantería', terrain: { bosque: 1, montana: 2, rio: -1 } },
     tirador:    { label: 'Tirador', terrain: { bosque: 2, montana: 1, rio: -1 } },
     montada:    { label: 'Montada', terrain: { rio: -1 } }, // a caballo no se esconde en bosque ni montaña
+    maquina:    { label: 'Máquina de guerra', terrain: { rio: -1 } }, // cañones y catapultas no se esconden
   };
-  // Tecnologías que más adelante darán defensa en un terreno: { tecnologia: { clase|'todas': { terreno: +n } } }
-  const TECH_TERRAIN = {};
+  // Tecnologías que dan defensa en un terreno: { tecnologia: { clase|'todas': { terreno: +n } } }
+  const TECH_TERRAIN = {
+    lenadores: { infanteria: { bosque: 1 } },
+    montaneros: { todas: { montana: 1 } },
+  };
+
+  // --- Tecnologías --------------------------------------------------------
+  // 5 ramas. En cada rama hay que ir en orden, y desde el nivel 2 hace falta tener
+  // una ciudad de ese nivel. "later": se puede investigar, pero lo que da llega más adelante.
+  const BRANCHES = [
+    { id: 'campo',  label: 'Campo' },
+    { id: 'monte',  label: 'Monte' },
+    { id: 'guerra', label: 'Guerra' },
+    { id: 'mar',    label: 'Mar' },
+    { id: 'saber',  label: 'Saber' },
+  ];
+  const TECHS = {
+    caza:          { branch: 'campo',  level: 1, label: 'Caza y caminos', text: 'Puesto de caza, caminos y puentes' },
+    molinos:       { branch: 'campo',  level: 2, label: 'Molinos',        text: '+1 comida en cada plantación de trigo' },
+    gremios:       { branch: 'campo',  level: 3, label: 'Gremios',        text: 'Subir una ciudad de nivel pide 1 edificio menos' },
+    lenadores:     { branch: 'monte',  level: 1, label: 'Leñadores',      text: 'Aserradero, y la infantería gana +1 de defensa en el bosque' },
+    mineria:       { branch: 'monte',  level: 2, label: 'Minería',        text: 'Mina' },
+    forja:         { branch: 'monte',  level: 3, label: 'Forja',          text: 'Espadachín y caballero' },
+    montaneros:    { branch: 'monte',  level: 4, label: 'Montañeros',     text: 'Todas tus tropas ganan +1 de defensa en la montaña' },
+    fortificacion: { branch: 'guerra', level: 1, label: 'Fortificación',  text: 'Fortificar ciudades y lancero' },
+    polvora:       { branch: 'guerra', level: 2, label: 'Pólvora',        text: 'Cañón' },
+    ingenieria:    { branch: 'guerra', level: 3, label: 'Ingeniería',     text: 'Catapulta' },
+    pesca:         { branch: 'mar',    level: 1, label: 'Pesca',          text: 'Puerto pesquero (la barca llega más adelante)' },
+    astilleros:    { branch: 'mar',    level: 2, label: 'Astilleros',     text: 'Carabela', later: true },
+    rutas:         { branch: 'mar',    level: 3, label: 'Rutas marítimas', text: 'Rutas de comercio por mar', later: true },
+    armada:        { branch: 'mar',    level: 4, label: 'Armada',         text: 'Galeón de guerra', later: true },
+    escritura:     { branch: 'saber',  level: 1, label: 'Escritura',      text: 'Las tecnologías te cuestan 1 oro menos' },
+    monasterios:   { branch: 'saber',  level: 2, label: 'Monasterios',    text: 'Monje: cura a las tropas de su lado' },
+    mitos:         { branch: 'saber',  level: 3, label: 'Mitos',          text: 'Lamia', later: true },
+    leyendas:      { branch: 'saber',  level: 4, label: 'Leyendas',       text: 'Gigante y dragón', later: true },
+  };
+  const TECH_COST = [0, 3, 5, 8, 12]; // por nivel de la tecnología
 
   // --- Tropas (cifras del documento de diseño) ----------------------------
   const UNITS = {
@@ -32,6 +71,12 @@
     miliciano: { label: 'Miliciano', hp: 10, atk: 2, def: 2, move: 1, range: 1, cost: 2, cls: 'infanteria', skills: [] },
     arquero:   { label: 'Arquero',   hp: 10, atk: 2, def: 1, move: 1, range: 2, cost: 3, cls: 'tirador', skills: ['distancia'] },
     jinete:    { label: 'Jinete',    hp: 10, atk: 2, def: 1, move: 2, range: 1, cost: 4, cls: 'montada', skills: ['hostigador', 'explorador'] },
+    espadachin: { label: 'Espadachín', hp: 12, atk: 3, def: 3, move: 1, range: 1, cost: 5, cls: 'infanteria', skills: [], tech: 'forja' },
+    lancero:   { label: 'Lancero',   hp: 10, atk: 2, def: 3, move: 1, range: 1, cost: 4, cls: 'infanteria', skills: ['antiMontada'], tech: 'fortificacion' },
+    caballero: { label: 'Caballero', hp: 15, atk: 4, def: 2, move: 2, range: 1, cost: 8, cls: 'montada', skills: ['implacable'], tech: 'forja' },
+    canon:     { label: 'Cañón',     hp: 10, atk: 3, def: 1, move: 1, range: 2, cost: 6, cls: 'maquina', skills: ['distancia', 'pesada'], tech: 'polvora' },
+    catapulta: { label: 'Catapulta', hp: 8,  atk: 5, def: 0, move: 1, range: 3, cost: 8, cls: 'maquina', skills: ['distancia', 'pesada', 'sinReplica'], tech: 'ingenieria' },
+    monje:     { label: 'Monje',     hp: 8,  atk: 0, def: 1, move: 1, range: 1, cost: 5, cls: 'infanteria', skills: ['sanador', 'civil'], tech: 'monasterios' },
   };
   const ARMIES = { real: ['miliciano'], prueba: ['miliciano', 'arquero', 'jinete'] };
   const has = (u, skill) => UNITS[u.type].skills.includes(skill);
@@ -49,23 +94,25 @@
     roadBonus: 1,                       // oro extra por cada ciudad unida a la capital (y lo mismo para la capital)
     unitsPerCity: (level) => level + 1, // tropas que puede mantener cada ciudad
     heal: 3, healInCity: 5, healCost: 1,
+    monkHeal: 3,                        // vida que cura el monje a cada tropa de al lado
+    techPerCity: 2, techPerCityLevel: 1, // precio extra de las tecnologías por cada ciudad que no es la capital (y por cada nivel suyo por encima del 1)
     cityVision: 2,
     ownGap: 3,   // distancia mínima entre dos ciudades tuyas (2 casillas libres en medio)
     enemyGap: 2, // distancia mínima a una ciudad enemiga (1 casilla libre), si la casilla es neutral
     foundOn: ['llanura', 'bosque'],
   };
   // Tropas que se pueden reclutar ahora (las demás llegarán con las tecnologías).
-  const RECRUITABLE = ['colono', 'miliciano', 'arquero', 'jinete'];
+  const RECRUITABLE = Object.keys(UNITS); // las que tienen "tech" piden esa tecnología
   // Edificios: dónde se construyen, cuánto oro cuestan y qué producen.
   // Baratos y sencillos (granja, cantera), caros y potentes (caza, mina), y dos con algo especial.
   const BUILDINGS = {
     granja:     { label: 'Plantación de trigo', resource: 'trigo',   cost: 2, gives: { comida: 1 } },
     cantera:    { label: 'Cantera',             terrain: 'montana', noResource: true, cost: 2, gives: { oro: 1 } },
-    caza:       { label: 'Puesto de caza',      resource: 'caza',    cost: 5, gives: { comida: 2 } },
-    mina:       { label: 'Mina',                resource: 'mineral', cost: 6, gives: { oro: 2 } },
-    aserradero: { label: 'Aserradero',          resource: 'lena',    cost: 3, gives: { oro: 1 }, forestBonus: 1,
+    caza:       { label: 'Puesto de caza',      resource: 'caza',    cost: 5, gives: { comida: 2 }, tech: 'caza' },
+    mina:       { label: 'Mina',                resource: 'mineral', cost: 6, gives: { oro: 2 }, tech: 'mineria' },
+    aserradero: { label: 'Aserradero',          resource: 'lena',    cost: 3, gives: { oro: 1 }, forestBonus: 1, tech: 'lenadores',
                   extra: '+1 más si en el territorio queda otro bosque sin edificio' },
-    puerto:     { label: 'Puerto pesquero',     resource: 'pesca',   cost: 4, gives: { comida: 1, oro: 1 } },
+    puerto:     { label: 'Puerto pesquero',     resource: 'pesca',   cost: 4, gives: { comida: 1, oro: 1 }, tech: 'pesca' },
   };
   const givesText = (g) => Object.entries(g).map(([k, v]) => `+${v} ${k}`).join(' y ');
   function buildingFor(t) {
@@ -92,7 +139,9 @@
   function newGame(opts) {
     const map = opts.map, players = opts.players || [0, 1], army = ARMIES[opts.army] || ARMIES.real;
     const anchors = opts.close ? closeAnchors(map, players.length) : map.starts.slice(0, players.length);
-    const game = { players: players.map(f => ({ faction: f, alive: true, techs: [], gold: ECON.startGold, food: ECON.startFood, founded: 0 })),
+    // En el modo de prueba se empieza con mucho oro y comida, para probarlo todo rápido.
+    const rich = army === ARMIES.prueba ? 30 : 0;
+    const game = { players: players.map(f => ({ faction: f, alive: true, techs: [], gold: ECON.startGold + rich, food: ECON.startFood + rich, founded: 0 })),
       turn: 0, round: 1, units: [], cities: [], territory: {}, buildings: {}, roads: {}, nextId: 1, winner: null, events: [] };
     const taken = new Set();
     anchors.forEach((a, p) => {
@@ -197,6 +246,8 @@
   // Lo que da un edificio en su casilla (el aserradero da más si queda otro bosque libre en el territorio).
   function buildingGives(game, map, t) {
     const type = game.buildings[key(t.col, t.row)], b = BUILDINGS[type], out = Object.assign({}, b.gives);
+    const owner = ownerOfTile(game, t.col, t.row);
+    if (type === 'granja' && owner && hasTech(game, owner.owner, 'molinos')) out.comida = (out.comida || 0) + 1;
     if (b.forestBonus) {
       const city = ownerOfTile(game, t.col, t.row);
       const free = city && cityTiles(game, map, city).some(x => x.terrain === 'bosque' && x !== t && !game.buildings[key(x.col, x.row)] && !cityAt(game, x.col, x.row));
@@ -224,10 +275,13 @@
     const lvl = cityLevel(game, map, city);
     if (city.owner !== game.turn) return 'No es tu ciudad.';
     if (lvl >= ECON.maxLevel) return 'Ya está en el nivel máximo.';
-    const need = ECON.levelNeeds(lvl), have = cityBuildings(game, map, city).length;
+    const need = levelNeedsFor(game, city), have = cityBuildings(game, map, city).length;
     if (have < need) return `Para subir al nivel ${lvl + 1} necesita ${need} edificio${need > 1 ? 's' : ''} en su territorio (tiene ${have}).`;
     if (game.players[game.turn].gold < ECON.levelCost(lvl)) return `Te falta oro para subir de nivel (cuesta ${ECON.levelCost(lvl)}).`;
     return null;
+  }
+  function levelNeedsFor(game, city) {
+    return Math.max(0, ECON.levelNeeds(cityLevel(null, null, city)) - (hasTech(game, city.owner, 'gremios') ? 1 : 0));
   }
   function levelUp(game, map, city) {
     if (levelUpProblem(game, map, city)) return false;
@@ -257,6 +311,7 @@
   function fortProblem(game, map, city) {
     if (city.owner !== game.turn) return 'No es tu ciudad.';
     if (city.fort) return 'Ya está fortificada.';
+    if (!hasTech(game, city.owner, 'fortificacion')) return 'Necesitas la tecnología Fortificación (rama Guerra).';
     if (game.players[game.turn].gold < ECON.fortCost) return `Te falta oro para fortificar (cuesta ${ECON.fortCost}).`;
     return null;
   }
@@ -274,6 +329,7 @@
     if (!t) return 'Aquí no.';
     if (t.terrain === 'mar' || t.terrain === 'costa') return 'No se puede hacer un camino en el mar.';
     if (hasRoad(game, t.col, t.row)) return 'Ya hay camino.';
+    if (!hasTech(game, game.turn, 'caza')) return 'Necesitas la tecnología Caza y caminos (rama Campo).';
     const owner = ownerOfTile(game, t.col, t.row);
     if (owner && owner.owner !== game.turn) return 'Es territorio enemigo.';
     const u = unitAt(game, t.col, t.row);
@@ -353,7 +409,8 @@
     const b = BUILDINGS[type];
     let problem = null;
     const other = unitAt(game, t.col, t.row);
-    if (other && other.owner !== game.turn) problem = 'Hay una tropa enemiga encima.';
+    if (b.tech && !hasTech(game, game.turn, b.tech)) problem = `Necesitas la tecnología ${TECHS[b.tech].label} (rama ${branchLabel(b.tech)}).`;
+    else if (other && other.owner !== game.turn) problem = 'Hay una tropa enemiga encima.';
     else if (game.players[game.turn].gold < b.cost) problem = `Te falta oro (cuesta ${b.cost}).`;
     return { type, problem, city };
   }
@@ -368,6 +425,8 @@
   // ¿Puede esta ciudad reclutar esta tropa? null si sí, o el motivo.
   function recruitProblem(game, map, city, type) {
     if (city.owner !== game.turn) return 'No es tu ciudad.';
+    const need = UNITS[type].tech;
+    if (need && !hasTech(game, city.owner, need)) return `Necesitas la tecnología ${TECHS[need].label}.`;
     if (unitAt(game, city.col, city.row)) return 'Hay una tropa en la ciudad: muévela primero.';
     if (cityUnits(game, city).length >= cityCapacity(game, map, city)) return `Esta ciudad ya tiene ${cityCapacity(game, map, city)} tropas (súbela de nivel para tener más).`;
     if (game.players[game.turn].food < UNITS[type].cost) return `Te falta comida (cuesta ${UNITS[type].cost}).`;
@@ -461,7 +520,8 @@
   function damage(game, map, att, def, attHp) {
     const hp = attHp === undefined ? att.hp : attHp;
     const hurt = hp * 2 < UNITS[att.type].hp ? 1 : 0;
-    return Math.max(1, 3 * UNITS[att.type].atk - defenseOf(map, def, game) - hurt);
+    const anti = has(def, 'antiMontada') && UNITS[att.type].cls === 'montada' ? 2 : 0;
+    return Math.max(1, 3 * UNITS[att.type].atk - defenseOf(map, def, game) - anti - hurt);
   }
   function inRange(att, def) { return M.distance(att.col, att.row, def.col, def.row) <= UNITS[att.type].range; }
 
@@ -492,6 +552,8 @@
     att.acted = true;
     if (!has(att, 'hostigador')) att.moved = true;
     if (r.kills) att.kills++;
+    // Implacable (caballero): si mata, puede atacar otra vez este turno (una vez).
+    if (r.kills && !r.dies && has(att, 'implacable') && !att.again) { att.acted = false; att.again = true; }
     if (r.dies) def.kills++;
     game.units = game.units.filter(u => u.hp > 0);
     checkWinner(game);
@@ -521,7 +583,7 @@
       if (next === 0) game.round++;
     } while (!game.players[next].alive && next !== game.turn);
     game.turn = next;
-    game.units.forEach(u => { if (u.owner === next) { u.moved = false; u.acted = false; } });
+    game.units.forEach(u => { if (u.owner === next) { u.moved = false; u.acted = false; u.again = false; } });
     for (const c of game.cities) {
       const u = unitAt(game, c.col, c.row);
       if (!u || u.owner !== next || c.owner === next) continue;
@@ -538,8 +600,58 @@
     game.events.push({ kind: 'cobro', oro: inc.oro, comida: inc.comida });
   }
   function canDoSomething(game, map, u) {
-    return reachable(game, map, u).size > 0 || targets(game, u).length > 0 || !healProblem(game, map, u)
+    return reachable(game, map, u).size > 0 || targets(game, u).length > 0 || !healProblem(game, map, u) || !blessProblem(game, map, u)
       || (u.type === 'colono' && !foundProblem(game, map, u));
+  }
+
+  // --- Monje: cura a las tropas de al lado ----------------------------------
+  function blessTargets(game, u) {
+    return game.units.filter(x => x.owner === u.owner && x !== u && x.hp < UNITS[x.type].hp && M.distance(x.col, x.row, u.col, u.row) === 1);
+  }
+  function blessProblem(game, map, u) {
+    if (!u || !has(u, 'sanador')) return 'Solo los monjes curan así.';
+    if (u.owner !== game.turn) return 'No es tu turno.';
+    if (u.acted) return 'Ya ha actuado este turno.';
+    if (!blessTargets(game, u).length) return 'No tiene al lado ninguna tropa tuya herida.';
+    return null;
+  }
+  function bless(game, map, u) {
+    if (blessProblem(game, map, u)) return null;
+    const out = blessTargets(game, u).map(x => { const n = Math.min(ECON.monkHeal, UNITS[x.type].hp - x.hp); x.hp += n; return { id: x.id, n }; });
+    u.acted = true;
+    return out;
+  }
+
+  // --- Tecnologías ----------------------------------------------------------
+  function hasTech(game, owner, id) { const p = game.players[owner]; return !!(p && p.techs && p.techs.includes(id)); }
+  function branchLabel(id) { return BRANCHES.find(b => b.id === TECHS[id].branch).label; }
+  function techsOfBranch(branch) { return Object.keys(TECHS).filter(k => TECHS[k].branch === branch).sort((a, b) => TECHS[a].level - TECHS[b].level); }
+  // Precio: según el nivel, +2 por cada ciudad que no es la capital y +1 por cada nivel de esa ciudad por encima del 1.
+  function techCost(game, owner, id) {
+    let cost = TECH_COST[TECHS[id].level];
+    for (const c of game.cities) {
+      if (c.owner !== owner || c.capital) continue;
+      cost += ECON.techPerCity + ECON.techPerCityLevel * (cityLevel(game, null, c) - 1);
+    }
+    if (hasTech(game, owner, 'escritura') && id !== 'escritura') cost -= 1;
+    return Math.max(1, cost);
+  }
+  function techProblem(game, owner, id) {
+    const t = TECHS[id];
+    if (!t) return 'No existe.';
+    if (hasTech(game, owner, id)) return 'Ya la tienes.';
+    const prev = techsOfBranch(t.branch).find(k => TECHS[k].level === t.level - 1);
+    if (prev && !hasTech(game, owner, prev)) return `Antes necesitas ${TECHS[prev].label}.`;
+    if (t.level > 1 && !game.cities.some(c => c.owner === owner && cityLevel(game, null, c) >= t.level)) return `Necesitas una ciudad de nivel ${t.level}.`;
+    if (owner !== game.turn) return 'No es tu turno.';
+    if (game.players[owner].gold < techCost(game, owner, id)) return `Te falta oro (cuesta ${techCost(game, owner, id)}).`;
+    return null;
+  }
+  function research(game, owner, id) {
+    if (techProblem(game, owner, id)) return null;
+    game.players[owner].gold -= techCost(game, owner, id);
+    game.players[owner].techs.push(id);
+    return id;
   }
 
   // --- Órdenes ------------------------------------------------------------
@@ -562,6 +674,8 @@
       case 'fortificar': return city && fortify(game, map, city);
       case 'recruit': return city && recruit(game, map, city, o.type);
       case 'heal': return u && heal(game, map, u);
+      case 'sanar': return u && bless(game, map, u);
+      case 'tech': return research(game, game.turn, o.id);
       case 'end': endTurn(game, map); return true;
       default: return null;
     }
@@ -571,7 +685,8 @@
   function applyCleared(game, map) {
     for (const k of Object.keys(game.cleared || {})) { const [c, r] = k.split(',').map(Number); const t = M.tileAt(map, c, r); if (t) t.resource = null; }
   }
-  const api = { applyCleared, perform, unitById, UNITS, SKILLS, CLASSES, TECH_TERRAIN, ARMIES, GROUND, ECON, BUILDINGS, RECRUITABLE, has, visionOf, newGame, unitAt, reachable, targets, preview, move, attack,
+  const api = { TECHS, BRANCHES, hasTech, techCost, techProblem, research, techsOfBranch, branchLabel,
+    blessTargets, blessProblem, bless, levelNeedsFor, applyCleared, perform, unitById, UNITS, SKILLS, CLASSES, TECH_TERRAIN, ARMIES, GROUND, ECON, BUILDINGS, RECRUITABLE, has, visionOf, newGame, unitAt, reachable, targets, preview, move, attack,
     endTurn, defenseOf, terrainDef, weak, canDoSomething, key,
     cityAt, cityById, ownerOfTile, cityTiles, cityLevel, cityIncome, playerIncome, cityUnits, cityCapacity,
     foundProblem, found, buildOption, build, buildingFor, recruitProblem, recruit, healProblem, healAmount, heal,
