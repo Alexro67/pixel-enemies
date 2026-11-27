@@ -289,6 +289,15 @@
           const img = this.add.image(o.x, o.y, 'hl_move').setOrigin(0, 0).setDepth(m.row + 0.5);
           this.layer.add(img); this.hlLayer.push(img);
         }
+        // Colono: una banderita en las casillas azules donde podría fundar.
+        this.foundSpots = 0;
+        if (u.type === 'colono') for (const m of this.moves.values()) {
+          if (R.foundProblem(game, map, Object.assign({}, u, { col: m.col, row: m.row, acted: false }))) continue;
+          this.foundSpots++;
+          const o = T.tileOrigin(m.col, m.row);
+          const f = this.add.image(o.x + T.W / 2 + 4, o.y + T.TOP + T.H / 2 - 6, `flag_${factionOf(u.owner)}`).setDepth(m.row + 0.55);
+          this.layer.add(f); this.hlLayer.push(f);
+        }
         this.targets = R.targets(game, u).filter(e => !this.isHidden(e.col, e.row));
         for (const e of this.targets) {
           const o = T.tileOrigin(e.col, e.row), pv = R.preview(game, map, u, e);
@@ -395,7 +404,7 @@
     // --- Acciones de ciudad y de tropa (botones de abajo) -------------------
     doFound(u) {
       const problem = R.foundProblem(state.game, state.map, u);
-      if (problem) { ui.say(problem); return; }
+      if (problem) { ui.say(`Aquí no se puede fundar: ${problem}`); return; }
       const city = R.found(state.game, state.map, u);
       this.drawUnits(); this.applyFog(); saveGame(); ui.refreshRes();
       this.showTile(M.tileAt(state.map, city.col, city.row));
@@ -657,8 +666,14 @@
         else if (!R.canDoSomething(g, map, u)) txt += '. Ya ha hecho todo este turno.';
         if (u.type === 'colono') {
           const problem = R.foundProblem(g, map, u);
-          actions.push({ label: 'Fundar ciudad aquí', main: !problem, onClick: () => sc.doFound(u) });
-          if (problem && !u.acted) txt += ` · Para fundar: ${problem}`;
+          actions.push({ label: problem ? 'Fundar ciudad (aquí no se puede)' : 'Fundar ciudad aquí', main: !problem, onClick: () => sc.doFound(u) });
+          const where = sc.foundSpots ? ' Las banderitas marcan dónde sí puedes fundar.'
+            : sc.moves && sc.moves.size ? ' Aléjate más: hace falta una casilla sin dueño, con 2 casillas libres hasta tus otras ciudades.' : '';
+          let head;
+          if (!problem) head = 'Este colono puede fundar una ciudad aquí.';
+          else if (u.acted) head = 'Este colono acaba de salir: podrá moverse y fundar en tu próximo turno.';
+          else head = `Aquí no se puede fundar: ${problem}${where}`;
+          txt = `${head} · ${txt}`;
         }
         if (u.hp < s.hp) {
           const problem = R.healProblem(g, map, u);

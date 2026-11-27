@@ -28,7 +28,7 @@
 
   // --- Tropas (cifras del documento de diseño) ----------------------------
   const UNITS = {
-    colono:    { label: 'Colono',    hp: 5,  atk: 0, def: 1, move: 1, range: 1, cost: 4, cls: 'infanteria', skills: ['civil', 'sinReplica'] },
+    colono:    { label: 'Colono',    hp: 5,  atk: 0, def: 1, move: 1, range: 1, cost: 4, cls: 'infanteria', skills: ['civil'] },
     miliciano: { label: 'Miliciano', hp: 10, atk: 2, def: 2, move: 1, range: 1, cost: 2, cls: 'infanteria', skills: [] },
     arquero:   { label: 'Arquero',   hp: 10, atk: 2, def: 1, move: 1, range: 2, cost: 3, cls: 'tirador', skills: ['distancia'] },
     jinete:    { label: 'Jinete',    hp: 10, atk: 2, def: 1, move: 2, range: 1, cost: 4, cls: 'montada', skills: ['hostigador', 'explorador'] },
@@ -324,7 +324,7 @@
   function foundProblem(game, map, u) {
     if (!u || u.type !== 'colono') return 'Solo un colono puede fundar ciudades.';
     if (u.owner !== game.turn) return 'No es tu turno.';
-    if (u.acted) return 'Este colono ya ha actuado este turno.';
+    if (u.acted) return 'Este colono acaba de salir; podrá fundar en tu próximo turno.';
     const t = M.tileAt(map, u.col, u.row);
     if (!ECON.foundOn.includes(t.terrain)) return 'Solo se puede fundar en llanura o bosque.';
     if (t.resource) return 'Aquí hay un recurso: busca una casilla sin recurso.';
