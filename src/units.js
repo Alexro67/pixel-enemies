@@ -310,7 +310,30 @@
     return p.done();
   }
 
-  const DRAW = { colono, miliciano, arquero, jinete, espadachin, lancero, caballero, canon, catapulta, monje };
+  // Mercader: con mula cargada de fardos, sombrero de ala y bolsa de monedas.
+  function mercader(color) {
+    const c = shades(color), p = new Pix(28, 36);
+    shadow(p, 14, 33, 10);
+    // fardo grande a la espalda, atado con cuerdas
+    p.rect(3, 12, 8, 12, '#b8935a'); p.rect(3, 12, 8, 2, '#d8b87a'); p.rect(9, 12, 2, 12, '#8a6a3a');
+    p.rect(3, 17, 8, 1, LEATHER[2]); p.rect(6, 12, 1, 12, LEATHER[2]);
+    p.rect(4, 8, 6, 4, c[1]); p.rect(4, 8, 6, 1, c[0]); // tela del color de la facción
+    legs(p, 11, 25, ['#6a5a7a', '#56486a', '#3e3450']);
+    body(p, 10, 16, 8, 10, c);
+    p.rect(10, 22, 8, 1, LEATHER[1]);
+    // bolsa de monedas en la mano
+    p.rect(18, 19, 3, 3, SKIN[0]);
+    p.ellipse(21, 24, 2.6, 2.6, null, (u, v) => (u + v < -0.3 ? '#e8c060' : '#b08a30'));
+    p.set(21, 21, LEATHER[2]); p.set(20, 24, '#fff2a8');
+    head(p, 14, 11);
+    // sombrero de fieltro con pluma
+    p.rect(9, 8, 11, 1, '#3e2a1a'); p.rect(11, 5, 7, 3, '#5a3c24'); p.rect(11, 7, 7, 1, c[1]);
+    p.line(16, 5, 19, 1, '#f4efe0');
+    outline(p);
+    return p.done();
+  }
+
+  const DRAW = { colono, miliciano, arquero, jinete, espadachin, lancero, caballero, canon, catapulta, monje, mercader };
   function makeUnitCanvas(type, color) { return DRAW[type](color); }
 
   root.PEUnits = { makeUnitCanvas, TYPES: Object.keys(DRAW) };

@@ -392,6 +392,107 @@
     for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) p.set(x0 + 2 + i * 2, w + y0 - 3 + j * 2, '#c9c0a0');
   }
 
+  // --- Edificios grandes -------------------------------------------------------
+  // Mercado: puestos con toldos de colores, cajas y sacos.
+  function market(p, oy) {
+    for (let y = 14; y < H - 8; y++) for (let x = 10; x < W - 10; x++) if (edgeDist(x, y) >= 6) p.set(x, oy + y, (x * 5 + y * 3) % 9 === 0 ? '#b89a66' : (x + y) % 2 ? '#d2b884' : '#c8ad78');
+    const stall = (x, y, a, b) => {
+      shadowSoft(p, x + 6, y + 1, 8, 2);
+      p.rect(x, y - 7, 12, 7, '#8a5a2b'); p.rect(x + 1, y - 6, 10, 2, '#e2c070'); // mostrador con género
+      p.set(x + 2, y - 7, '#d9472f'); p.set(x + 5, y - 7, '#7fbf3f'); p.set(x + 8, y - 7, '#f0a830');
+      p.rect(x, y - 15, 1, 8, C.woodD); p.rect(x + 11, y - 15, 1, 8, C.woodD);
+      for (let i = -1; i < 13; i++) for (let j = 0; j < 4; j++) p.set(x + i, y - 18 + j + (j === 3 && i % 2 ? 1 : 0), Math.floor((i + 1) / 2) % 2 ? a : b);
+    };
+    stall(10, oy + 26, '#d9472f', '#f4efe0');
+    stall(32, oy + 24, '#3b6fd2', '#f4efe0');
+    stall(20, oy + 40, '#e8b020', '#7a3fa0');
+    // sacos y cajas
+    p.ellipse(44, oy + 38, 3, 3, null, (u, v) => (u + v < 0 ? '#e0cf9c' : '#b8a270'));
+    p.rect(8, oy + 34, 5, 4, C.wood); p.rect(8, oy + 34, 5, 1, C.woodHi);
+  }
+  // Taller: nave de piedra con chimenea humeante, yunque y rueda.
+  function workshop(p, oy) {
+    house(p, 14, oy + 32, 20, 11, ['#8a8f98', '#6a6f78', '#4a4e56'], ['#cfc6b0', '#ada48e', '#7d765f']);
+    p.rect(28, oy + 6, 4, 12, '#8f897b'); p.rect(30, oy + 6, 2, 12, '#6f6a5e'); p.rect(27, oy + 5, 6, 2, '#5a554a');
+    p.ellipse(31, oy + 1, 3, 2.2, '#d8d8dc', null); p.ellipse(34, oy - 3, 2.5, 2, '#c4c4ca', null); p.ellipse(36, oy - 7, 2, 1.6, '#b0b0b8', null);
+    p.rect(17, oy + 26, 4, 3, '#f0a030'); p.set(18, oy + 26, '#ffe08a'); // fragua encendida en la ventana
+    // yunque
+    p.rect(38, oy + 34, 8, 2, '#3a3d44'); p.rect(40, oy + 36, 4, 3, '#2a2c32'); p.rect(36, oy + 34, 2, 1, '#3a3d44'); p.rect(38, oy + 34, 8, 1, '#8c9098');
+    // rueda de carro apoyada
+    p.ellipse(10, oy + 38, 4, 4, null, (u, v) => (u * u + v * v > 0.55 ? C.woodD : u * u + v * v < 0.1 ? C.wood : (Math.abs(u) < 0.15 || Math.abs(v) < 0.15 ? C.wood : null)));
+  }
+  // Templo: piedra clara con columnas, frontón y escalinata.
+  function temple(p, oy) {
+    const x = 12, y = oy + 36, w = 32;
+    shadowSoft(p, x + w / 2 + 2, y + 2, w / 2 + 4, 3);
+    for (let k = 0; k < 3; k++) p.rect(x - 3 + k * 1, y - k * 2, w + 6 - k * 2, 2, k % 2 ? '#c9c3b4' : '#e2ddd0');
+    p.rect(x, y - 18, w, 13, '#e8e3d6');
+    for (let c = 0; c < 5; c++) { const cx = x + 2 + c * 7; p.rect(cx, y - 18, 3, 13, '#f6f2e8'); p.rect(cx + 2, y - 18, 1, 13, '#c9c3b4'); }
+    p.rect(x + 13, y - 12, 6, 7, '#4a3a2a');
+    p.rect(x - 2, y - 20, w + 4, 2, '#c9c3b4');
+    for (let j = 0; j < 7; j++) { const half = Math.round((w / 2 + 2) * (j + 1) / 7); p.rect(x + w / 2 - half, y - 27 + j, half * 2, 1, j === 6 ? '#a8a294' : '#ddd7c8'); }
+    p.rect(x + w / 2 - 1, y - 26, 2, 3, '#f5cf3a'); // llama dorada
+  }
+
+  // --- Murallas y torres --------------------------------------------------------
+  // Muralla: tramos de piedra desde el centro hacia los lados que tocan otra muralla o torre (mask: E, O, NO, NE, SO, SE).
+  function makeWallCanvas(color, mask, damaged, gate) {
+    const p = new Pix(TW, TH), oy = TOP;
+    const [r, g, b] = hex2rgb(color);
+    const ends = [[W - 3, H / 2], [3, H / 2], [W / 4 + 1, H / 8 + 2], [W * 3 / 4 - 1, H / 8 + 2], [W / 4 + 1, H * 7 / 8 - 2], [W * 3 / 4 - 1, H * 7 / 8 - 2]];
+    const cx = W / 2, cy = H / 2;
+    const segs = ends.filter((e, i) => mask & (1 << i));
+    const pts = [];
+    if (!segs.length) for (let a = 0; a < 1; a += 0.02) pts.push([cx - 12 + 24 * a, cy + 2]);
+    for (const [ex, ey] of segs) for (let a = 0; a <= 1; a += 0.02) pts.push([cx + (ex - cx) * a, cy + (ey - cy) * a]);
+    pts.sort((a, b) => a[1] - b[1]);
+    const rr = makeRng(mask * 17 + (damaged ? 5 : 1));
+    for (const [x0, y0] of pts) {
+      const x = Math.round(x0), y = Math.round(y0);
+      shadowSoft(p, x + 2, oy + y + 2, 2, 1);
+      for (let j = 0; j < 10; j++) for (let i = -2; i <= 2; i++) {
+        const xx = x + i, yy = oy + y - j;
+        const crack = damaged && rr() < 0.08;
+        p.set(xx, yy, crack ? '#4a463e' : j === 9 ? '#e6e1d4' : i === 2 ? '#8f897b' : (xx + Math.floor((j + (xx >> 2)) / 3)) % 7 === 0 ? '#9e988a' : '#bdb6a6');
+      }
+      if ((x + y) % 4 < 2) { p.set(x, oy + y - 10, '#d4cfc0'); p.set(x, oy + y - 11, '#e6e1d4'); }
+    }
+    if (gate) {
+      // puerta: dos torreones con un arco y portón de madera abierto
+      for (const gx of [cx - 9, cx + 4]) {
+        p.rect(gx, oy + cy - 16, 6, 18, '#c9c3b4'); p.rect(gx + 4, oy + cy - 16, 2, 18, '#9e988a');
+        for (let k = 0; k < 3; k++) p.rect(gx + k * 2, oy + cy - 18, 1, 2, '#d8d2c4');
+      }
+      p.rect(cx - 3, oy + cy - 13, 7, 3, '#bdb6a6');
+      p.ellipse(cx + 0.5, oy + cy - 4, 3.5, 6, null, (u, v) => (v < -0.6 && Math.abs(u) > 0.7 ? null : '#2a1e16'));
+      p.rect(cx - 3, oy + cy - 4, 1, 6, C.woodD); p.rect(cx + 3, oy + cy - 4, 1, 6, C.woodD);
+      p.rect(cx - 1, oy + cy - 24, 1, 8, '#3b2414');
+      for (let y = 0; y < 4; y++) for (let x = 0; x < 6; x++) p.set(cx + x, oy + cy - 24 + y, [r, g, b]);
+    } else {
+      // pilar central con un estandarte del color del dueño
+      p.rect(cx - 3, oy + cy - 14, 6, 14, '#c9c3b4'); p.rect(cx + 1, oy + cy - 14, 2, 14, '#9e988a');
+      p.rect(cx - 1, oy + cy - 22, 1, 8, '#3b2414');
+      for (let y = 0; y < 4; y++) for (let x = 0; x < 6; x++) p.set(cx + x, oy + cy - 22 + y, [r, g, b]);
+    }
+    return p.done();
+  }
+  // Torre de vigía: alta, de piedra, con almenas y la bandera del dueño.
+  function makeTowerCanvas(color, damaged) {
+    const p = new Pix(TW, TH), oy = TOP;
+    const [r, g, b] = hex2rgb(color);
+    const tx = 21, base = oy + 34;
+    shadowSoft(p, tx + 9, base + 1, 12, 3);
+    p.rect(tx, base - 40, 14, 40, '#c9c3b4'); p.rect(tx + 10, base - 40, 4, 40, '#9e988a');
+    for (let k = 0; k < 40; k += 5) p.rect(tx, base - 40 + k, 10, 1, '#b4ae9f');
+    p.rect(tx - 2, base - 44, 18, 4, '#d8d2c4'); p.rect(tx + 12, base - 44, 4, 4, '#a8a294');
+    for (let k = 0; k < 5; k++) p.rect(tx - 2 + k * 4, base - 47, 2, 3, '#d8d2c4');
+    p.rect(tx + 4, base - 30, 3, 5, '#2a2030'); p.rect(tx + 4, base - 16, 3, 5, '#2a2030'); p.rect(tx + 4, base - 6, 5, 6, '#3a2a20');
+    p.rect(tx + 6, base - 58, 1, 11, '#3b2414');
+    for (let y = 0; y < 5; y++) for (let x = 0; x < 8; x++) p.set(tx + 7 + x, base - 58 + y + Math.round(Math.sin(x / 2) * 0.6), [r, g, b]);
+    if (damaged) { p.line(tx + 2, base - 36, tx + 6, base - 26, '#4a463e'); p.line(tx + 9, base - 20, tx + 5, base - 10, '#4a463e'); p.rect(tx + 14, base - 44, 2, 3, null); }
+    return p.done();
+  }
+
   // --- Ciudades ------------------------------------------------------------------
   // Tamaño según el nivel: 1-2 aldea, 3-4 villa con empalizada, 5-7 ciudad con torre.
   function makeCityCanvas(color, size, capital, fort) {
@@ -560,7 +661,10 @@
       side(p, C.dirt);
       face(p, oy, C.grass, r, C.grassEdge);
       grassTufts(p, oy, r, 10);
-      if (building) {
+      if (building === 'mercado') market(p, oy);
+      else if (building === 'taller') workshop(p, oy);
+      else if (building === 'templo') temple(p, oy);
+      else if (building) {
         plowedField(p, oy);
       } else if (resource === 'trigo') {
         wildWheat(p, oy, r);
@@ -671,6 +775,6 @@
 
   root.PETiles = {
     W, H, TW, TH, TOP, SIDE, WATER_DROP, ROW_STEP, COL_STEP, VARIANTS,
-    makeTerrainCanvas, makeCityCanvas, makeBorderCanvas, makeRoadCanvas, makeFogCanvas, makeOutlineCanvas, makeFlagCanvas, makeFillCanvas, tileOrigin, insideHex, edgeDist, Pix, hex2rgb,
+    makeTerrainCanvas, makeCityCanvas, makeWallCanvas, makeTowerCanvas, makeBorderCanvas, makeRoadCanvas, makeFogCanvas, makeOutlineCanvas, makeFlagCanvas, makeFillCanvas, tileOrigin, insideHex, edgeDist, Pix, hex2rgb,
   };
 })(this);
