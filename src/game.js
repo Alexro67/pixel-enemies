@@ -217,7 +217,7 @@
       for (const t of map.tiles) {
         const st = R.structAt(game, t.col, t.row);
         if (t.hidden || !st) continue;
-        const f = factionOf(st.owner), hurt = st.hp < R.ECON.structHp ? 1 : 0, o = T.tileOrigin(t.col, t.row);
+        const f = factionOf(st.owner), hurt = st.hp < st.max ? 1 : 0, o = T.tileOrigin(t.col, t.row);
         let key;
         if (st.kind === 'muralla') {
           let mask = 0;
@@ -948,7 +948,7 @@
       else if (t.resource) { const r = M.RESOURCE[t.resource]; txt += ` · ${r.label} (${r.kind})`; }
       if (b && R.BUILDINGS[b].big) txt += ` (${R.BUILDINGS[b].extra})`;
       const st = R.structAt(gm, t.col, t.row);
-      if (st) txt += ` · ${st.kind === 'muralla' ? 'Muralla' : 'Torre'} de ${nameOf(st.owner)}, vida ${st.hp}/${R.ECON.structHp}`
+      if (st) txt += ` · ${st.kind === 'muralla' ? 'Muralla' : 'Torre'} de ${nameOf(st.owner)}, vida ${st.hp}/${st.max}`
         + (st.kind === 'muralla' ? ': el enemigo no puede pasar' : `: ve a ${R.ECON.towerVision} casillas`);
       const owner = R.ownerOfTile(gm, t.col, t.row);
       txt += owner ? ` · Territorio de ${cityName(owner)}` : ' · Sin dueño';
@@ -973,7 +973,7 @@
       } else if (!b && !st && owner && owner.owner === gm.turn && !R.buildingFor(t) && t.terrain !== 'mar' && t.terrain !== 'costa') {
         txt += ' · Aquí se puede hacer un camino, una muralla o una torre';
       }
-      if (st && st.owner === gm.turn && st.hp < R.ECON.structHp) {
+      if (st && st.owner === gm.turn && st.hp < st.max) {
         const problem = R.repairProblem(gm, map, t);
         actions.push({ label: `Reparar (${R.ECON.repairCost} oro)`, main: !problem, disabled: !!problem, onClick: () => sc.doRepair(t) });
       }

@@ -106,14 +106,14 @@
     trades: 3,                          // cambios por turno en cada mercado (2 de una cosa por 1 de la otra)
     templeHeal: 2,                      // vida que recuperan solas tus tropas en el territorio de un templo
     routeGold: 1, routeFarGold: 2, routeFar: 4, // oro por ruta para cada ciudad (2 si están a más de 4 casillas)
-    wallCost: 3, towerCost: 5, structHp: 10, repairCost: 2,
+    wallCost: 3, towerCost: 5, wallHp: 30, towerHp: 20, repairCost: 2,
     wallDefense: 2,                     // defensa extra a tu tropa que está sobre tu muralla
     towerVision: 3,
   };
   // Murallas y torres: se construyen en tu territorio o en terreno neutral (como los caminos).
   const STRUCTS = {
-    muralla: { label: 'Muralla', cost: () => ECON.wallCost },
-    torre:   { label: 'Torre', cost: () => ECON.towerCost },
+    muralla: { label: 'Muralla', cost: () => ECON.wallCost, hp: () => ECON.wallHp },
+    torre:   { label: 'Torre', cost: () => ECON.towerCost, hp: () => ECON.towerHp },
   };
   // Tropas que se pueden reclutar ahora (las demás llegarán con las tecnologías).
   const RECRUITABLE = Object.keys(UNITS); // las que tienen "tech" piden esa tecnología
@@ -499,8 +499,8 @@
   // puede golpearlas cuando no hay nadie encima; al llegar a 0 de vida, desaparecen.
   function structAt(game, col, row) {
     const k = key(col, row);
-    if (game.walls && game.walls[k]) return Object.assign({ kind: 'muralla', key: k, col, row }, game.walls[k]);
-    if (game.towers && game.towers[k]) return Object.assign({ kind: 'torre', key: k, col, row }, game.towers[k]);
+    if (game.walls && game.walls[k]) return Object.assign({ kind: 'muralla', key: k, col, row, max: ECON.wallHp }, game.walls[k]);
+    if (game.towers && game.towers[k]) return Object.assign({ kind: 'torre', key: k, col, row, max: ECON.towerHp }, game.towers[k]);
     return null;
   }
   function structStore(game, kind) { return kind === 'muralla' ? game.walls : game.towers; }
@@ -535,21 +535,22 @@
   function buildStruct(game, map, t, kind) {
     if (structProblem(game, map, t, kind)) return null;
     game.players[game.turn].gold -= STRUCTS[kind].cost();
-    structStore(game, kind)[key(t.col, t.row)] = { owner: game.turn, hp: ECON.structHp };
+    structStore(game, kind)[key(t.col, t.row)] = { owner: game.turn, hp: STRUCTS[kind].hp() };
     return kind;
   }
   function repairProblem(game, map, t) {
     const s = t && structAt(game, t.col, t.row);
     if (!s) return 'No hay nada que reparar.';
     if (s.owner !== game.turn) return 'No es tuya.';
-    if (s.hp >= ECON.structHp) return 'Está entera.';
+    if (s.hp >= s.max) return 'Está entera.';
     if (game.players[game.turn].gold < ECON.repairCost) return `Te falta oro (cuesta ${ECON.repairCost}).`;
     return null;
   }
   function repair(game, map, t) {
     if (repairProblem(game, map, t)) return false;
     game.players[game.turn].gold -= ECON.repairCost;
-    structStore(game, structAt(game, t.col, t.row).kind)[key(t.col, t.row)].hp = ECON.structHp;
+    const s = structAt(game, t.col, t.row);
+    structStore(game, s.kind)[s.key].hp = s.max;
     return true;
   }
   // Murallas y torres enemigas (sin nadie encima) a las que esta tropa puede golpear.
