@@ -915,10 +915,12 @@
     if (game.players[game.turn].food < cost) return `Te falta comida (cuesta ${cost}).`;
     return null;
   }
-  function recruit(game, map, city, type) {
+  // dock: en barcos, el muelle elegido ({ col, row }); si no se da o no vale, el primero libre.
+  function recruit(game, map, city, type, dock) {
     if (recruitProblem(game, map, city, type)) return null;
     game.players[game.turn].food -= unitCost(game, city.owner, type);
-    const at = UNITS[type].sea ? cityDocks(game, map, city, type).find(t => !unitAt(game, t.col, t.row)) : city;
+    const free = UNITS[type].sea ? freeDocks(game, map, city, type) : [];
+    const at = UNITS[type].sea ? (dock && free.find(t => t.col === dock.col && t.row === dock.row)) || free[0] : city;
     const u = makeUnit(game, type, city.owner, at.col, at.row);
     u.home = city.id; u.moved = true; u.acted = true; // la tropa nueva espera al turno siguiente
     if (has(u, 'comerciante')) u.from = city.id;
@@ -926,6 +928,7 @@
     return u;
   }
 
+  function freeDocks(game, map, city, type) { return cityDocks(game, map, city, type).filter(t => !unitAt(game, t.col, t.row)); }
   // Muelles y puertos de la ciudad donde puede salir este barco (en el río solo caben las barcas).
   function cityDocks(game, map, city, type) {
     return cityTiles(game, map, city).filter(t => {
@@ -1329,7 +1332,7 @@
       case 'nivel': return city && levelUp(game, map, city);
       case 'ampliar': return city && expand(game, map, city);
       case 'fortificar': return city && fortify(game, map, city);
-      case 'recruit': return city && recruit(game, map, city, o.type);
+      case 'recruit': return city && recruit(game, map, city, o.type, o.col !== undefined ? { col: o.col, row: o.row } : null);
       case 'heal': return u && heal(game, map, u);
       case 'sanar': return u && bless(game, map, u);
       case 'tech': return research(game, game.turn, o.id);
@@ -1370,7 +1373,7 @@
     cutDown(t);
     return true;
   }
-  const api = { levelFood, canOfferFell, fellProblem, fell, roadCost, fortCost, structCost, FACTIONS, PERK_NUMBERS, perk, factionUnit, techDetails, TECHS, BRANCHES, hasTech, techCost, techProblem, research, techsOfBranch, branchLabel,
+  const api = { freeDocks, levelFood, canOfferFell, fellProblem, fell, roadCost, fortCost, structCost, FACTIONS, PERK_NUMBERS, perk, factionUnit, techDetails, TECHS, BRANCHES, hasTech, techCost, techProblem, research, techsOfBranch, branchLabel,
     blessTargets, blessProblem, bless, levelNeedsFor, applyCleared, perform, unitById, UNITS, SKILLS, CLASSES, TECH_TERRAIN, ARMIES, GROUND, ECON, BUILDINGS, RECRUITABLE, has, visionOf, newGame, unitAt, reachable, targets, preview, move, attack,
     endTurn, defenseOf, terrainDef, weak, canDoSomething, key,
     cityAt, cityById, ownerOfTile, cityTiles, cityLevel, cityIncome, playerIncome, cityUnits, cityCapacity,

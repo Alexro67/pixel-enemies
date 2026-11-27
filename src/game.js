@@ -692,8 +692,24 @@
         : what === 'ampliar' ? `${cityName(city)} amplía su territorio con ${ok} casillas nuevas.`
         : `${cityName(city)} está fortificada: quien la defienda tendrá +${R.ECON.fortDefense} de defensa.`);
     }
-    doRecruit(city, type) {
-      const u = this.order({ a: 'recruit', city: city.id, type });
+    // Barcos con varios muelles libres: primero se elige en cuál sale (tocándolo en el mapa).
+    askDock(city, type) {
+      const docks = R.freeDocks(state.game, state.map, city, type);
+      if (docks.length < 2) return this.doRecruit(city, type);
+      this.selectUnit(null); this.selectTile(null);
+      this.clearHighlights();
+      for (const d of docks) {
+        const img = this.add.image(T.tileOrigin(d.col, d.row).x, this.tileY(d), 'hl_move').setOrigin(0, 0).setDepth(d.row + 0.5);
+        this.layer.add(img); this.hlLayer.push(img);
+      }
+      this.layer.sort('depth');
+      this.pickDock = { city, type, docks };
+      ui.setActions([{ label: 'Cancelar', onClick: () => { this.pickDock = null; this.clearHighlights(); this.showTile(M.tileAt(state.map, city.col, city.row)); } }]);
+      ui.say(`¿En qué muelle sale ${R.UNITS[type].label.toLowerCase()}? Toca uno de los marcados en azul.`);
+    }
+    doRecruit(city, type, dock) {
+      this.pickDock = null;
+      const u = this.order(dock ? { a: 'recruit', city: city.id, type, col: dock.col, row: dock.row } : { a: 'recruit', city: city.id, type });
       if (!u) return;
       this.drawUnits(); this.applyFog(); saveGame(); ui.refreshRes();
       this.selectUnit(null);
@@ -765,7 +781,7 @@
         else if (o.a === 'despedir' && u) this.doDismiss(u);
         else if (o.a === 'road') this.doRoad(M.tileAt(state.map, o.col, o.row));
         else if (o.a === 'talar') this.doFell(M.tileAt(state.map, o.col, o.row));
-        else if (o.a === 'recruit' && c) this.doRecruit(c, o.type);
+        else if (o.a === 'recruit' && c) this.doRecruit(c, o.type, o.col !== undefined ? o : null);
         else if (o.a === 'heal' && u) this.doHeal(u);
         else if (o.a === 'sanar' && u) await this.doBless(u);
         else if (o.a === 'tech') R.perform(state.game, state.map, o); // las tecnologías de los demás no se ven
@@ -909,6 +925,12 @@
       if (this.busy || ui.overlayOpen()) return;
       const w = this.worldAt(sx, sy), game = state.game;
       const tile = this.tileUnder(w);
+      if (this.pickDock) { // eligiendo muelle para un barco nuevo
+        const pd = this.pickDock, d = tile && pd.docks.find(x => x.col === tile.col && x.row === tile.row);
+        this.clearHighlights();
+        if (d) return this.doRecruit(pd.city, pd.type, d);
+        this.pickDock = null; ui.say('No se ha reclutado nada.');
+      }
       const touched = this.unitUnder(w) || (tile && R.unitAt(game, tile.col, tile.row));
       const sel = this.selected;
       if (sel && sel.owner === game.turn && this.myTurn()) {
@@ -1166,7 +1188,7 @@
         // Solo se enseñan las tropas que ya tienes (las demás salen al investigar).
         const list = R.RECRUITABLE.filter(type => (!R.UNITS[type].tech || R.hasTech(g, c.owner, R.UNITS[type].tech)) && !R.factionUnit(g, c.owner, type)).map(type => {
           const problem = R.recruitProblem(g, map, c, type);
-          return { label: `${R.UNITS[type].label} (${R.unitCost(g, c.owner, type)} comida)`, disabled: !!problem, onClick: () => sc.doRecruit(c, type), problem };
+          return { label: `${R.UNITS[type].label} (${R.unitCost(g, c.owner, type)} comida)`, disabled: !!problem, onClick: () => (R.UNITS[type].sea ? sc.askDock(c, type) : sc.doRecruit(c, type)), problem };
         });
         const blocked = list.find(x => x.problem && !/comida|Solo se recluta|muelle/.test(x.problem)) || list.find(x => x.problem && /Solo se recluta/.test(x.problem));
         const dockless = list.find(x => x.problem && /muelle/.test(x.problem));
