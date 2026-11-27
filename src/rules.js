@@ -171,12 +171,12 @@
                   extra: 'también sirve de muelle para sacar barcos' },
     muelle:     { label: 'Muelle', terrains: ['costa', 'rio'], noResource: true, cost: 3, gives: {}, tech: 'pesca', dock: true,
                   extra: 'de aquí salen los barcos de la ciudad' },
-    // Edificios grandes: en una llanura vacía, uno de cada por ciudad, y piden 2 edificios al lado.
+    // Edificios grandes: en una llanura vacía, uno de cada por ciudad. El mercado pide 2 edificios al lado; taller y templo, 1 (Alex).
     mercado:    { label: 'Mercado', big: true, cost: 8, gives: {}, tech: 'comercio', near: null, per: 'oro',
                   extra: '+1 oro por cada edificio de al lado. Cambia comida por oro y recluta mercaderes' },
-    taller:     { label: 'Taller',  big: true, cost: 8, gives: {}, tech: 'forja', near: ['mina', 'cantera', 'aserradero'], per: 'oro',
+    taller:     { label: 'Taller',  big: true, nearNeeded: 1, cost: 8, gives: {}, tech: 'forja', near: ['mina', 'cantera', 'aserradero'], per: 'oro',
                   extra: '+1 oro por cada mina, cantera o aserradero de al lado. Cañones y catapultas, y edificios 1 oro más baratos en esta ciudad' },
-    templo:     { label: 'Templo',  big: true, cost: 6, gives: {}, tech: 'monasterios', near: ['granja', 'caza', 'puerto'], per: 'comida',
+    templo:     { label: 'Templo',  big: true, nearNeeded: 1, cost: 6, gives: {}, tech: 'monasterios', near: ['granja', 'caza', 'puerto'], per: 'comida',
                   extra: '+1 comida por cada plantación, puesto de caza o puerto de al lado. Tus tropas en su territorio se curan 2 solas y recluta monjes' },
     santuario:  { label: 'Santuario de las leyendas', big: true, cost: 15, gives: {}, tech: 'mitos', nearNeeded: 0, minLevel: 4,
                   extra: 'aquí se reclutan la lamia, el gigante y el dragón. Solo en ciudades de nivel 4 o más' },
@@ -537,7 +537,7 @@
       if (b.tech && !hasTech(game, game.turn, b.tech)) problem = `Necesitas la tecnología ${TECHS[b.tech].label} (rama ${branchLabel(b.tech)}).`;
       else if (cityHas(game, map, city, type)) problem = `Esta ciudad ya tiene ${b.label.toLowerCase()}.`;
       else if (b.minLevel && cityLevel(game, map, city) < b.minLevel) problem = `Solo en ciudades de nivel ${b.minLevel} o más (esta es de nivel ${cityLevel(game, map, city)}).`;
-      else if (near < (b.nearNeeded === undefined ? 2 : b.nearNeeded)) problem = `Necesita al lado al menos 2 edificios${b.near ? ' de estos: ' + b.near.map(k => BUILDINGS[k].label.toLowerCase()).join(', ') : ''} (tiene ${near}).`;
+      else if (near < (b.nearNeeded === undefined ? 2 : b.nearNeeded)) problem = `Necesita al lado al menos ${b.nearNeeded === undefined ? 2 : b.nearNeeded} edificio${b.nearNeeded === 1 ? '' : 's'}${b.near ? ' de estos: ' + b.near.map(k => BUILDINGS[k].label.toLowerCase()).join(', ') : ''} (tiene ${near}).`;
       else if (other && other.owner !== game.turn) problem = 'Hay una tropa enemiga encima.';
       else if (game.players[game.turn].gold < cost) problem = `Te falta oro (cuesta ${cost}).`;
       return { type, problem, city, cost, near };
