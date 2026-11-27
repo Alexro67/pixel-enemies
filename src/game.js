@@ -640,6 +640,13 @@
       const can = !R.levelUpProblem(state.game, state.map, city);
       ui.say(`${b.label} construido: ${R.givesText(R.buildingGives(state.game, state.map, t))} por turno.` + (can ? ` ${cityName(city)} ya puede subir de nivel.` : ''));
     }
+    doFell(t) {
+      if (!this.order({ a: 'talar', col: t.col, row: t.row })) return;
+      this.drawMap(); this.drawUnits(); this.applyFog(); saveGame(); ui.refreshRes();
+      if (this.replaying) return;
+      this.showTile(t);
+      ui.say('Bosque talado: ahora es llanura. Aquí puedes hacer un edificio grande.');
+    }
     doRoad(t) {
       if (!this.order({ a: 'road', col: t.col, row: t.row })) return;
       this.applyFog(); saveGame(); ui.refreshRes();
@@ -729,6 +736,7 @@
         else if (o.a === 'derribar') this.doDemolish(M.tileAt(state.map, o.col, o.row), o.what);
         else if (o.a === 'despedir' && u) this.doDismiss(u);
         else if (o.a === 'road') this.doRoad(M.tileAt(state.map, o.col, o.row));
+        else if (o.a === 'talar') this.doFell(M.tileAt(state.map, o.col, o.row));
         else if (o.a === 'recruit' && c) this.doRecruit(c, o.type);
         else if (o.a === 'heal' && u) this.doHeal(u);
         else if (o.a === 'sanar' && u) await this.doBless(u);
@@ -1085,6 +1093,11 @@
           actions.push({ label: `${R.STRUCTS[kind].label} (${R.structCost(gm, gm.turn, kind)} oro)${lock}`, disabled: !!problem, onClick: () => sc.doStruct(t, kind) });
           if (problem && kind === 'torre' && /una torre/.test(problem)) txt += ` · ${problem}`;
         }
+      }
+      if (R.canOfferFell(gm, map, t) && R.hasTech(gm, gm.turn, 'tala')) {
+        const problem = R.fellProblem(gm, map, t);
+        actions.push({ label: `Talar bosque (${R.ECON.fellCost} oro)`, disabled: !!problem, onClick: () => sc.doFell(t) });
+        if (problem && !opt) txt += ` · Talar: ${problem}`;
       }
       if (R.canOfferRoad(gm, map, t)) {
         const problem = R.roadProblem(gm, map, t);

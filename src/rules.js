@@ -12,7 +12,7 @@
     distancia:   { label: 'A distancia', text: 'ataca desde lejos' },
     sinReplica:  { label: 'Sin contraataque', text: 'no devuelve los golpes' },
     pesada:      { label: 'Pesada', text: 'si se mueve, no puede atacar ese turno' },
-    hostigador:  { label: 'Hostigador', text: 'puede moverse después de atacar' },
+    hostigador:  { label: 'Hostigador', text: 'después de atacar puede moverse otra vez, aunque ya se hubiera movido antes' },
     explorador:  { label: 'Explorador', text: 've a 2 casillas' },
     civil:       { label: 'Civil', text: 'no ataca ni contraataca' },
     antiMontada: { label: 'Antijinetes', text: '+2 de defensa contra tropas montadas' },
@@ -71,6 +71,8 @@
                      text: 'Una ruta de comercio vale también por agua: si las dos ciudades tienen muelle o puerto unidos por agua, no hace falta camino. Lleva al mercader en barco hasta la otra ciudad. Pide antes Pesca porque hacen falta muelles y barcos' },
     lenadores:     { branch: 'monte',  level: 1, label: 'Leñadores',      text: 'Tu infantería gana +1 de defensa en el bosque' },
     mineria:       { branch: 'monte',  level: 2, label: 'Minería',        text: '' },
+    tala:          { branch: 'monte',  level: 3, label: 'Tala',
+                     text: 'Talar un bosque de tu territorio: 2 oro. Se convierte en llanura para siempre (se pierden los animales o la leña que hubiera) y ahí puedes poner un molino, un mercado, un taller, un templo o el Santuario. No se puede talar con un edificio encima ni con un enemigo' },
     montaneros:    { branch: 'monte',  level: 4, label: 'Montañeros',     text: 'Todas tus tropas ganan +1 de defensa en la montaña' },
     arqueria:      { branch: 'armas',  level: 1, label: 'Arquería',       text: '' },
     forja:         { branch: 'armas',  level: 2, label: 'Forja',          text: 'Con el taller, los demás edificios de esa ciudad cuestan 1 oro menos' },
@@ -203,7 +205,7 @@
     trades: 3,                          // cambios por turno en cada mercado (2 de una cosa por 1 de la otra)
     templeHeal: 2,                      // vida que recuperan solas tus tropas en el territorio de un templo
     routeGold: 1, routeFarGold: 2, routeFar: 4, // oro por ruta para cada ciudad (2 si están a más de 4 casillas)
-    wallCost: 4, towerCost: 7, demolishCost: 1, wallHp: 30, towerHp: 20, repairCost: 2,
+    wallCost: 4, towerCost: 7, demolishCost: 1, fellCost: 2, wallHp: 30, towerHp: 20, repairCost: 2,
     wallDefense: 2,                     // defensa extra a tu tropa que está sobre tu muralla
     towerVision: 3,
   };
@@ -700,7 +702,7 @@
     const destroyed = store[s.key].hp <= 0;
     if (destroyed) delete store[s.key];
     unit.acted = true;
-    if (!has(unit, 'hostigador')) unit.moved = true;
+    escapeAfterHit(unit);
     return { kind: s.kind, dealt, destroyed, owner: s.owner };
   }
   function wallBonus(game, u) {
@@ -1118,6 +1120,11 @@
     if (isShip(unit)) passengers(game, unit).forEach(p => { p.col = col; p.row = row; }); // los de a bordo van con él
     return dest.path;
   }
+  // Hostigador (jinete): después de atacar puede moverse otra vez, aunque ya se hubiera movido (una vez por turno).
+  function escapeAfterHit(u) {
+    if (!has(u, 'hostigador')) u.moved = true;
+    else if (u.moved && !u.escaped) { u.moved = false; u.escaped = true; }
+  }
   function attack(game, map, att, def) {
     if (att.owner !== game.turn || !targets(game, att).includes(def)) return null;
     const r = preview(game, map, att, def);
@@ -1133,7 +1140,7 @@
       victim.gold -= r.stole; mine.gold += r.stole;
     }
     att.acted = true;
-    if (!has(att, 'hostigador')) att.moved = true;
+    escapeAfterHit(att);
     if (r.kills) att.kills++;
     // Implacable (caballero): si mata, puede atacar otra vez este turno (una vez).
     if (r.kills && !r.dies && has(att, 'implacable') && !att.again) { att.acted = false; att.again = true; }
@@ -1171,7 +1178,7 @@
       if (next === 0) game.round++;
     } while (!game.players[next].alive && next !== game.turn);
     game.turn = next;
-    game.units.forEach(u => { if (u.owner === next) { u.moved = false; u.acted = false; u.again = false; u.landed = false; } });
+    game.units.forEach(u => { if (u.owner === next) { u.moved = false; u.acted = false; u.again = false; u.landed = false; u.escaped = false; } });
     game.cities.forEach(c => { if (c.owner === next) c.trades = 0; });
     for (const c of game.cities) {
       const u = unitAt(game, c.col, c.row);
@@ -1314,6 +1321,7 @@
       case 'derribar': return t && demolish(game, map, t, o.what);
       case 'despedir': return u && dismiss(game, map, u);
       case 'road': return t && buildRoad(game, map, t);
+      case 'talar': return t && fell(game, map, t);
       case 'nivel': return city && levelUp(game, map, city);
       case 'ampliar': return city && expand(game, map, city);
       case 'fortificar': return city && fortify(game, map, city);
@@ -1326,12 +1334,39 @@
     }
   }
 
-  // Al cargar una partida guardada: quita del mapa los recursos que se perdieron al fundar ciudades.
+  // Al cargar una partida guardada: quita del mapa los recursos que se perdieron al fundar ciudades
+  // y convierte en llanura los bosques talados.
   function applyCleared(game, map) {
     ensure(game);
     for (const k of Object.keys(game.cleared || {})) { const [c, r] = k.split(',').map(Number); const t = M.tileAt(map, c, r); if (t) t.resource = null; }
+    for (const k of Object.keys(game.felled || {})) { const [c, r] = k.split(',').map(Number); const t = M.tileAt(map, c, r); if (t) cutDown(t); }
   }
-  const api = { roadCost, fortCost, structCost, FACTIONS, PERK_NUMBERS, perk, factionUnit, techDetails, TECHS, BRANCHES, hasTech, techCost, techProblem, research, techsOfBranch, branchLabel,
+  function cutDown(t) { if (t.terrain === 'bosque') { t.terrain = 'llanura'; t.resource = null; t.wasForest = true; } }
+
+  // --- Tala: un bosque de tu territorio se convierte en llanura ---------------------
+  function canOfferFell(game, map, t) {
+    const owner = t && ownerOfTile(game, t.col, t.row);
+    const forest = t && (t.terrain === 'bosque' || (t.wasForest && !(game.felled || {})[key(t.col, t.row)])); // (en una repetición el mapa ya está talado)
+    return !!forest && !!owner && owner.owner === game.turn && !cityAt(game, t.col, t.row);
+  }
+  function fellProblem(game, map, t) {
+    if (!canOfferFell(game, map, t)) return 'Solo se talan bosques de tu territorio.';
+    if (!hasTech(game, game.turn, 'tala')) return 'Necesitas la tecnología Tala (rama Monte).';
+    if (game.buildings[key(t.col, t.row)]) return 'Hay un edificio: derríbalo antes.';
+    const u = unitAt(game, t.col, t.row);
+    if (u && u.owner !== game.turn) return 'Hay una tropa enemiga encima.';
+    if (game.players[game.turn].gold < ECON.fellCost) return `Te falta oro (talar cuesta ${ECON.fellCost}).`;
+    return null;
+  }
+  function fell(game, map, t) {
+    if (fellProblem(game, map, t)) return null;
+    game.players[game.turn].gold -= ECON.fellCost;
+    game.felled = game.felled || {};
+    game.felled[key(t.col, t.row)] = true;
+    cutDown(t);
+    return true;
+  }
+  const api = { canOfferFell, fellProblem, fell, roadCost, fortCost, structCost, FACTIONS, PERK_NUMBERS, perk, factionUnit, techDetails, TECHS, BRANCHES, hasTech, techCost, techProblem, research, techsOfBranch, branchLabel,
     blessTargets, blessProblem, bless, levelNeedsFor, applyCleared, perform, unitById, UNITS, SKILLS, CLASSES, TECH_TERRAIN, ARMIES, GROUND, ECON, BUILDINGS, RECRUITABLE, has, visionOf, newGame, unitAt, reachable, targets, preview, move, attack,
     endTurn, defenseOf, terrainDef, weak, canDoSomething, key,
     cityAt, cityById, ownerOfTile, cityTiles, cityLevel, cityIncome, playerIncome, cityUnits, cityCapacity,
