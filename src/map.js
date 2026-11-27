@@ -8,14 +8,16 @@
   const SIZES = {
     // radius = casillas del centro al borde; el mapa es un hexágono de lado radius+1.
     // Unas 140-165 casillas por jugador.
+    mini:    { radius: 7,  players: 2, label: 'Muy pequeño' }, // 15 de ancho, 169 casillas
     pequeno: { radius: 10, players: 2, label: 'Pequeño' },  // 21 de ancho, 331 casillas
     mediano: { radius: 13, players: 4, label: 'Mediano' },  // 27 de ancho, 547 casillas
     grande:  { radius: 16, players: 6, label: 'Grande' },   // 33 de ancho, 817 casillas
+    enorme:  { radius: 20, players: 6, label: 'Enorme' },   // 41 de ancho, 1261 casillas
   };
   // land = parte del mapa que es tierra; freq = lo "troceada" que sale la tierra.
   const MAP_TYPES = {
     continente: { land: 0.56, freq: 1.8, edge: 1.3, label: 'Continente' },
-    costas:     { land: 0.46, freq: 2.4, edge: 0.9, label: 'Costas' },
+    costas:     { land: 0.46, land2: 0.52, freq: 2.4, edge: 0.9, bays: 0.9, label: 'Costas' }, // bays: bahías que se meten en la tierra (mapas nuevos)
     islas:      { land: 0.38, freq: 3.0, edge: 0.3, islands: true, label: 'Islas' },
   };
   // Probabilidad de que una casilla útil tenga recurso ("normal" = unos 2 por ciudad).
@@ -162,7 +164,8 @@
 
     // Tierra: el % exacto que pide el tipo de mapa.
     const sortedElev = tiles.map(t => t.elev).sort((a, b) => b - a);
-    const seaLevel = sortedElev[Math.floor(tiles.length * type.land) - 1];
+    const landShare = (opts.gen || 1) >= 2 && type.land2 ? type.land2 : type.land; // en los mapas nuevos de costas, algo más de tierra (las bahías se comen parte)
+    const seaLevel = sortedElev[Math.floor(tiles.length * landShare) - 1];
     const land = tiles.filter(t => t.elev >= seaLevel);
     land.forEach(t => (t.terrain = 'llanura'));
 
@@ -175,6 +178,31 @@
                     : [[1, 0], [0, -1], [-1, -1], [-1, 0], [-1, 1], [0, 1]];
       return at(t.col + D[d][0], t.row + D[d][1]);
     };
+    // Bahías y rías (solo en mapas nuevos, gen 2): el mar entra en la tierra desde la orilla.
+    // Usan su propio azar, así los demás mapas salen exactamente igual que antes.
+    if (type.bays && (opts.gen || 1) >= 2) {
+      const rb = makeRng(seed + '|bahias|' + opts.size);
+      const isSea = (t) => t && t.terrain === 'mar';
+      const want = Math.round((4 + R * 0.75) * type.bays);
+      for (let tries = 0, made = 0; made < want && tries < want * 20; tries++) {
+        const shore = land.filter(t => t.terrain !== 'mar' && t.ring < R - 1 && [0, 1, 2, 3, 4, 5].some(d => isSea(step(t, d))));
+        if (!shore.length) break;
+        let cur = shore[Math.floor(rb() * shore.length)];
+        const seaDirs = [0, 1, 2, 3, 4, 5].filter(d => isSea(step(cur, d)));
+        let dir = (seaDirs[Math.floor(rb() * seaDirs.length)] + 3) % 6; // hacia dentro
+        const length = 3 + Math.floor(rb() * 5), wide = rb() < 0.35;
+        let dug = 0;
+        for (let k = 0; k < length && cur && cur.terrain === 'llanura' && cur.ring < R - 1; k++) {
+          cur.terrain = 'mar'; dug++;
+          if (wide && k < length - 1) { const side = step(cur, (dir + (rb() < 0.5 ? 1 : 5)) % 6); if (side && side.terrain === 'llanura') side.terrain = 'mar'; }
+          if (rb() < 0.35) dir = (dir + (rb() < 0.5 ? 1 : 5)) % 6;
+          cur = step(cur, dir);
+        }
+        if (dug) made++;
+      }
+      land.forEach(t => { if (![0, 1, 2, 3, 4, 5].some(d => { const n = step(t, d); return n && n.terrain !== 'mar'; })) t.terrain = 'mar'; }); // sin islotes sueltos
+      for (let i = land.length - 1; i >= 0; i--) if (land[i].terrain === 'mar') land.splice(i, 1);
+    }
     const near = (t, dist) => tiles.some(o => o.terrain === 'montana' && distance(o.col, o.row, t.col, t.row) <= dist);
     let mountains = 0;
     const byHeight = land.slice().sort((a, b) => (b.elev + b.rock) - (a.elev + a.rock));
@@ -248,7 +276,12 @@
     }
 
     // Puntos de salida: casillas de llanura o bosque, lo más separadas posible y lejos del borde.
-    const startable = tiles.filter(t => (t.terrain === 'llanura' || t.terrain === 'bosque') && !t.resource && t.ring < R);
+    let startable = tiles.filter(t => (t.terrain === 'llanura' || t.terrain === 'bosque') && !t.resource && t.ring < R);
+    // En los mapas nuevos, nadie empieza en una punta de tierra estrecha: hace falta tierra alrededor.
+    if ((opts.gen || 1) >= 2) {
+      const roomy = startable.filter(t => tiles.filter(o => distance(o.col, o.row, t.col, t.row) <= 2 && !TERRAIN[o.terrain].water).length >= 13);
+      if (roomy.length >= players) startable = roomy;
+    }
     const starts = [];
     if (startable.length) {
       starts.push(startable[Math.floor(rng() * startable.length)]);
@@ -266,7 +299,7 @@
     const index = new Array(cols * rows).fill(-1);
     out.forEach((t, i) => (index[t.row * cols + t.col] = i));
     return {
-      seed, size: opts.size, type: opts.type, abundance: opts.abundance, radius: R, cols, rows,
+      seed, size: opts.size, type: opts.type, abundance: opts.abundance, gen: opts.gen || 1, radius: R, cols, rows,
       tiles: out, index,
       starts: starts.map(t => ({ col: t.col, row: t.row })),
     };
@@ -277,7 +310,8 @@
     return i >= 0 ? map.tiles[i] : null;
   }
 
-  const api = { SIZES, MAP_TYPES, ABUNDANCE, TERRAIN, RESOURCE, generate, tileAt, neighbors, distance, randomCode };
+  const GEN = 2; // versión actual del generador (las partidas viejas guardan la suya)
+  const api = { GEN, SIZES, MAP_TYPES, ABUNDANCE, TERRAIN, RESOURCE, generate, tileAt, neighbors, distance, randomCode };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PEMap = api;
 })(this);

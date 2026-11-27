@@ -109,7 +109,9 @@
       if (saved.game || online) {
         state.size = saved.size; state.type = saved.type; state.abundance = saved.abundance; state.armies = ({ cerca: 'prueba', lejos: 'real' })[saved.armies] || saved.armies;
       }
-      const map = M.generate({ seed: saved.seed, size: state.size, type: state.type, abundance: state.abundance, players: players.length });
+      // gen: versión del generador de mapas (2 = costas con bahías). Las partidas guardadas antes siguen con su mapa de siempre.
+      state.gen = saved.game || online ? (saved.gen || 1) : M.GEN;
+      const map = M.generate({ seed: saved.seed, size: state.size, type: state.type, abundance: state.abundance, players: players.length, gen: state.gen });
       state.map = map;
       state.game = saved.game || R.newGame({ map, players, close: state.armies === 'prueba', army: state.armies });
       R.applyCleared(state.game, map);
@@ -858,7 +860,7 @@
   function saveGame() {
     if (state.me !== null || (window.PEGame && window.PEGame.replaying)) return; // las online se guardan en el servidor
     const m = state.map;
-    localSet(SAVE_KEY, JSON.stringify({ seed: m.seed, size: state.size, type: state.type, abundance: state.abundance,
+    localSet(SAVE_KEY, JSON.stringify({ seed: m.seed, size: state.size, type: state.type, abundance: state.abundance, gen: state.gen,
       armies: state.armies, game: state.game }));
   }
   function loadGame() {
@@ -1038,7 +1040,7 @@
         actions.push({ label: `Derribar ${d.label.toLowerCase()} (${R.ECON.demolishCost} oro)`, disabled: !!problem, onClick: () => sc.askDemolish(t, d) });
       }
       if (R.canOfferStruct(gm, map, t)) {
-        const lock = R.hasTech(gm, gm.turn, 'fortificacion') ? '' : ' 🔒';
+        const lock = R.hasTech(gm, gm.turn, 'murallas') ? '' : ' 🔒';
         for (const kind of ['muralla', 'torre']) {
           const problem = R.structProblem(gm, map, t, kind);
           actions.push({ label: `${R.STRUCTS[kind].label} (${R.STRUCTS[kind].cost()} oro)${lock}`, disabled: !!problem, onClick: () => sc.doStruct(t, kind) });
@@ -1074,9 +1076,8 @@
         if (lvlProblem && lvl < E.maxLevel) txt += ` · ${lvlProblem}`;
         const upgrades = [];
         if (lvl < E.maxLevel) upgrades.push({ label: `Subir a nivel ${lvl + 1} (${E.levelCost(lvl)} oro)`, main: !lvlProblem, disabled: !!lvlProblem, onClick: () => sc.doCity(c, 'nivel') });
-        if (!c.expanded) upgrades.push({ label: `Ampliar territorio (${E.expandCost} oro)`, disabled: !!R.expandProblem(g, map, c), onClick: () => sc.doCity(c, 'ampliar') });
+        if (!c.expanded) upgrades.push({ label: `Ampliar territorio (${E.expandCost} oro)` + (R.hasTech(g, c.owner, E.expandTech) ? '' : ' 🔒'), disabled: !!R.expandProblem(g, map, c), onClick: () => sc.doCity(c, 'ampliar') });
         if (!c.fort) upgrades.push({ label: `Fortificar (${E.fortCost} oro)` + (R.hasTech(g, c.owner, 'fortificacion') ? '' : ' 🔒'), disabled: !!R.fortProblem(g, map, c), onClick: () => sc.doCity(c, 'fortificar') });
-        if (!c.expanded && lvl < E.expandLevel) txt += ` · Podrá ampliar su territorio al llegar a nivel ${E.expandLevel}.`;
         if (R.cityHas(g, map, c, 'mercado')) {
           for (const to of ['oro', 'comida'])
             upgrades.push({ label: to === 'oro' ? '2 comida → 1 oro' : '2 oro → 1 comida', disabled: !!R.tradeProblem(g, map, c, to), onClick: () => sc.doTrade(c, to) });
@@ -1085,7 +1086,7 @@
         // Solo se enseñan las tropas que ya tienes (las demás salen al investigar).
         const list = R.RECRUITABLE.filter(type => !R.UNITS[type].tech || R.hasTech(g, c.owner, R.UNITS[type].tech)).map(type => {
           const problem = R.recruitProblem(g, map, c, type);
-          return { label: `${R.UNITS[type].label} (${R.UNITS[type].cost} comida)`, disabled: !!problem, onClick: () => sc.doRecruit(c, type), problem };
+          return { label: `${R.UNITS[type].label} (${R.unitCost(g, c.owner, type)} comida)`, disabled: !!problem, onClick: () => sc.doRecruit(c, type), problem };
         });
         const blocked = list.find(x => x.problem && !/comida|Solo se recluta|muelle/.test(x.problem)) || list.find(x => x.problem && /Solo se recluta/.test(x.problem));
         const dockless = list.find(x => x.problem && /muelle/.test(x.problem));
@@ -1238,7 +1239,7 @@
     for (const [k, v] of Object.entries(M.MAP_TYPES)) $('type').add(new Option(v.label, k));
     for (const [k, v] of Object.entries(M.ABUNDANCE)) $('abundance').add(new Option(v.label, k));
     $('armies').add(new Option('Prueba: todo cerca', 'prueba'));
-    $('armies').add(new Option('Real: 1 miliciano', 'real'));
+    $('armies').add(new Option('Real: colono y miliciano', 'real'));
   }
 
   window.PEUI = ui;

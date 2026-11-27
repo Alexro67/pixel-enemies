@@ -43,28 +43,34 @@
   const BRANCHES = [
     { id: 'campo',  label: 'Campo' },
     { id: 'monte',  label: 'Monte' },
-    { id: 'guerra', label: 'Guerra' },
+    { id: 'caballos', label: 'Caballos' },
+    { id: 'tiro',   label: 'Tiro' },
+    { id: 'guerra', label: 'Defensa' },
     { id: 'mar',    label: 'Mar' },
     { id: 'saber',  label: 'Saber' },
   ];
   const TECHS = {
-    caza:          { branch: 'campo',  level: 1, label: 'Caza y caminos', text: 'Puedes construir el puesto de caza (5 oro, +2 comida) en bosques con animales, y caminos y puentes (2 oro). Por camino las tropas gastan medio movimiento y una ciudad unida a la capital da +1 oro' },
+    caza:          { branch: 'campo',  level: 1, label: 'Caza y caminos', text: 'Puedes construir el puesto de caza (5 oro, +2 comida) en bosques con animales, y caminos y puentes (2 oro). Por camino las tropas gastan medio movimiento y una ciudad unida a la capital da +1 oro. Y puedes ampliar el territorio de tus ciudades (8 oro, un anillo más de casillas)' },
     molinos:       { branch: 'campo',  level: 2, label: 'Molinos',        text: 'Cada plantación de trigo da +1 comida más (2 en vez de 1)' },
     gremios:       { branch: 'campo',  level: 3, label: 'Gremios',        text: 'Subir una ciudad de nivel pide 1 edificio menos en su territorio' },
-    comercio:      { branch: 'campo',  level: 4, label: 'Comercio',       text: 'Puedes construir el mercado (8 oro, +1 oro por cada edificio de al lado, cambia comida por oro) y reclutar al mercader (3 comida), que abre rutas de comercio entre dos ciudades unidas por camino: 1 oro por turno a cada una, o 2 si están a más de 4 casillas' },
+    comercio:      { branch: 'campo',  level: 4, label: 'Comercio',       text: 'Puedes construir el mercado (8 oro, +1 oro por cada edificio de al lado, cambia comida por oro) y reclutar al mercader (5 comida), que abre rutas de comercio entre dos ciudades unidas por camino: 1 oro por turno a cada una, o 2 si están a más de 4 casillas' },
     lenadores:     { branch: 'monte',  level: 1, label: 'Leñadores',      text: 'Puedes construir el aserradero (3 oro, +1 oro, +1 más si queda otro bosque libre) en bosques con leña. Tu infantería gana +1 de defensa en el bosque' },
     mineria:       { branch: 'monte',  level: 2, label: 'Minería',        text: 'Puedes construir la mina (6 oro, +2 oro) en montañas con mineral' },
-    forja:         { branch: 'monte',  level: 3, label: 'Forja',          text: 'Puedes reclutar espadachín (5 comida, fuerte en todo) y caballero (8 comida, mueve 2 y si mata vuelve a atacar), y construir el taller (8 oro, +1 oro por mina, cantera o aserradero de al lado; abarata 1 oro los edificios de su ciudad y permite cañones y catapultas)' },
+    forja:         { branch: 'monte',  level: 3, label: 'Forja',          text: 'Puedes reclutar el espadachín (8 comida, fuerte en todo) y construir el taller (8 oro, +1 oro por mina, cantera o aserradero de al lado; abarata 1 oro los edificios de su ciudad y permite cañones y catapultas)' },
     montaneros:    { branch: 'monte',  level: 4, label: 'Montañeros',     text: 'Todas tus tropas ganan +1 de defensa en la montaña' },
-    fortificacion: { branch: 'guerra', level: 1, label: 'Fortificación',  text: 'Puedes fortificar ciudades (5 oro, +2 de defensa al que la defiende), construir murallas (4 oro, 30 de vida, el enemigo no pasa) y torres de vigía (7 oro, 20 de vida, ven a 3 casillas), y reclutar al lancero (4 comida, +2 de defensa contra jinetes)' },
-    polvora:       { branch: 'guerra', level: 2, label: 'Pólvora',        text: 'Puedes reclutar el cañón (6 comida, dispara a 2 casillas, si se mueve no ataca ese turno). Solo en ciudades con taller' },
-    ingenieria:    { branch: 'guerra', level: 3, label: 'Ingeniería',     text: 'Puedes reclutar la catapulta (8 comida, dispara a 3 casillas, nadie le devuelve el golpe, si se mueve no ataca ese turno). Solo en ciudades con taller' },
-    pesca:         { branch: 'mar',    level: 1, label: 'Pesca',          text: 'Puedes construir el puerto pesquero (4 oro, +1 comida y +1 oro) en agua con peces y el muelle (3 oro) en cualquier casilla de costa o río de tu territorio. Los dos sirven para sacar barcos. Y puedes reclutar la barca (3 comida): va por ríos y por la costa y lleva 1 tropa' },
-    astilleros:    { branch: 'mar',    level: 2, label: 'Astilleros',     text: 'Puedes reclutar la carabela (6 comida): va por la costa y el mar abierto, mueve 4, ve a 2 casillas y lleva 2 tropas. Sale de un muelle o puerto de costa' },
+    equitacion:    { branch: 'caballos', level: 1, label: 'Equitación',   text: 'Puedes reclutar el jinete (6 comida): mueve 2, ve a 2 casillas y puede moverse después de atacar' },
+    caballeria:    { branch: 'caballos', level: 2, label: 'Caballería',   text: 'Puedes reclutar el caballero (12 comida): 15 de vida, ataque 4, mueve 2 y si mata vuelve a atacar' },
+    arqueria:      { branch: 'tiro',   level: 1, label: 'Arquería',       text: 'Puedes reclutar el arquero (5 comida): dispara a 2 casillas y se defiende bien en el bosque' },
+    polvora:       { branch: 'tiro',   level: 2, label: 'Pólvora',        text: 'Puedes reclutar el cañón (9 comida, dispara a 2 casillas, si se mueve no ataca ese turno). Solo en ciudades con taller' },
+    ingenieria:    { branch: 'tiro',   level: 3, label: 'Ingeniería',     text: 'Puedes reclutar la catapulta (12 comida, dispara a 3 casillas, nadie le devuelve el golpe, si se mueve no ataca ese turno). Solo en ciudades con taller' },
+    fortificacion: { branch: 'guerra', level: 1, label: 'Fortificación',  text: 'Puedes fortificar ciudades (5 oro, +2 de defensa al que la defiende) y reclutar al lancero (6 comida, +2 de defensa contra jinetes)' },
+    murallas:      { branch: 'guerra', level: 2, label: 'Murallas',       text: 'Puedes construir murallas (4 oro, 30 de vida, el enemigo no pasa) y torres de vigía (7 oro, 20 de vida, ven a 3 casillas)' },
+    pesca:         { branch: 'mar',    level: 1, label: 'Pesca',          text: 'Puedes construir el puerto pesquero (4 oro, +1 comida y +1 oro) en agua con peces y el muelle (3 oro) en cualquier casilla de costa o río de tu territorio. Los dos sirven para sacar barcos. Y puedes reclutar la barca (5 comida): va por ríos y por la costa, mueve 3 y lleva 2 tropas' },
+    astilleros:    { branch: 'mar',    level: 2, label: 'Astilleros',     text: 'Puedes reclutar la carabela (9 comida): va por la costa y el mar abierto, mueve 4, ve a 2 casillas y lleva 2 tropas. Sale de un muelle o puerto de costa' },
     rutas:         { branch: 'mar',    level: 3, label: 'Rutas marítimas', text: 'Una ruta de comercio vale también por agua: si las dos ciudades tienen muelle o puerto y están unidas por agua, no hace falta camino. Lleva el mercader en barco a la otra ciudad' },
-    armada:        { branch: 'mar',    level: 4, label: 'Armada',         text: 'Puedes reclutar el galeón de guerra (12 comida): 20 de vida, ataque 4, dispara a 2 casillas. Va por la costa y el mar abierto y no lleva tropas' },
+    armada:        { branch: 'mar',    level: 4, label: 'Armada',         text: 'Puedes reclutar el galeón de guerra (18 comida): 20 de vida, ataque 4, dispara a 2 casillas. Va por la costa y el mar abierto y no lleva tropas' },
     escritura:     { branch: 'saber',  level: 1, label: 'Escritura',      text: 'Todas las demás tecnologías te cuestan 1 oro menos' },
-    monasterios:   { branch: 'saber',  level: 2, label: 'Monasterios',    text: 'Puedes construir el templo (6 oro, +1 comida por cada plantación, puesto de caza o puerto de al lado; tus tropas heridas en su territorio se curan 2 cada turno) y reclutar al monje (5 comida) en ciudades con templo: en vez de atacar, cura 3 de vida a tus tropas de al lado' },
+    monasterios:   { branch: 'saber',  level: 2, label: 'Monasterios',    text: 'Puedes construir el templo (6 oro, +1 comida por cada plantación, puesto de caza o puerto de al lado; tus tropas heridas en su territorio se curan 2 cada turno) y reclutar al monje (8 comida) en ciudades con templo: en vez de atacar, cura 3 de vida a tus tropas de al lado' },
     mitos:         { branch: 'saber',  level: 3, label: 'Mitos',          text: 'Lamia, criatura de tierra y agua que encanta e inmoviliza', later: true },
     leyendas:      { branch: 'saber',  level: 4, label: 'Leyendas',       text: 'Gigante, que derriba murallas, y dragón, que escupe fuego', later: true },
   };
@@ -72,23 +78,23 @@
 
   // --- Tropas (cifras del documento de diseño) ----------------------------
   const UNITS = {
-    colono:    { label: 'Colono',    hp: 5,  atk: 0, def: 1, move: 1, range: 1, cost: 4, cls: 'infanteria', skills: ['civil'] },
-    miliciano: { label: 'Miliciano', hp: 10, atk: 2, def: 2, move: 1, range: 1, cost: 2, cls: 'infanteria', skills: [] },
-    arquero:   { label: 'Arquero',   hp: 10, atk: 2, def: 1, move: 1, range: 2, cost: 3, cls: 'tirador', skills: ['distancia'] },
-    jinete:    { label: 'Jinete',    hp: 10, atk: 2, def: 1, move: 2, range: 1, cost: 4, cls: 'montada', skills: ['hostigador', 'explorador'] },
-    espadachin: { label: 'Espadachín', hp: 12, atk: 3, def: 3, move: 1, range: 1, cost: 5, cls: 'infanteria', skills: [], tech: 'forja' },
-    lancero:   { label: 'Lancero',   hp: 10, atk: 2, def: 3, move: 1, range: 1, cost: 4, cls: 'infanteria', skills: ['antiMontada'], tech: 'fortificacion' },
-    caballero: { label: 'Caballero', hp: 15, atk: 4, def: 2, move: 2, range: 1, cost: 8, cls: 'montada', skills: ['implacable'], tech: 'forja' },
-    canon:     { label: 'Cañón',     hp: 10, atk: 3, def: 1, move: 1, range: 2, cost: 6, cls: 'maquina', skills: ['distancia', 'pesada'], tech: 'polvora', needs: 'taller' },
-    catapulta: { label: 'Catapulta', hp: 8,  atk: 5, def: 0, move: 1, range: 3, cost: 8, cls: 'maquina', skills: ['distancia', 'pesada', 'sinReplica'], tech: 'ingenieria', needs: 'taller' },
-    monje:     { label: 'Monje',     hp: 8,  atk: 0, def: 1, move: 1, range: 1, cost: 5, cls: 'infanteria', skills: ['sanador', 'civil'], tech: 'monasterios', needs: 'templo' },
-    mercader:  { label: 'Mercader',  hp: 5,  atk: 0, def: 1, move: 1, range: 1, cost: 3, cls: 'infanteria', skills: ['comerciante', 'civil'], tech: 'comercio', needs: 'mercado' },
+    colono:    { label: 'Colono',    hp: 5,  atk: 0, def: 1, move: 1, range: 1, cost: 6, cls: 'infanteria', skills: ['civil'] },
+    miliciano: { label: 'Miliciano', hp: 10, atk: 2, def: 2, move: 1, range: 1, cost: 3, cls: 'infanteria', skills: [] },
+    arquero:   { label: 'Arquero',   hp: 10, atk: 2, def: 1, move: 1, range: 2, cost: 5, cls: 'tirador', skills: ['distancia'], tech: 'arqueria' },
+    jinete:    { label: 'Jinete',    hp: 10, atk: 2, def: 1, move: 2, range: 1, cost: 6, cls: 'montada', skills: ['hostigador', 'explorador'], tech: 'equitacion' },
+    espadachin: { label: 'Espadachín', hp: 12, atk: 3, def: 3, move: 1, range: 1, cost: 8, cls: 'infanteria', skills: [], tech: 'forja' },
+    lancero:   { label: 'Lancero',   hp: 10, atk: 2, def: 3, move: 1, range: 1, cost: 6, cls: 'infanteria', skills: ['antiMontada'], tech: 'fortificacion' },
+    caballero: { label: 'Caballero', hp: 15, atk: 4, def: 2, move: 2, range: 1, cost: 12, cls: 'montada', skills: ['implacable'], tech: 'caballeria' },
+    canon:     { label: 'Cañón',     hp: 10, atk: 3, def: 1, move: 1, range: 2, cost: 9, cls: 'maquina', skills: ['distancia', 'pesada'], tech: 'polvora', needs: 'taller' },
+    catapulta: { label: 'Catapulta', hp: 8,  atk: 5, def: 0, move: 1, range: 3, cost: 12, cls: 'maquina', skills: ['distancia', 'pesada', 'sinReplica'], tech: 'ingenieria', needs: 'taller' },
+    monje:     { label: 'Monje',     hp: 8,  atk: 0, def: 1, move: 1, range: 1, cost: 8, cls: 'infanteria', skills: ['sanador', 'civil'], tech: 'monasterios', needs: 'templo' },
+    mercader:  { label: 'Mercader',  hp: 5,  atk: 0, def: 1, move: 1, range: 1, cost: 5, cls: 'infanteria', skills: ['comerciante', 'civil'], tech: 'comercio', needs: 'mercado' },
     // Barcos: salen del muelle (o puerto) de la ciudad. "sea" = por dónde navegan; "carry" = tropas que llevan.
-    barca:     { label: 'Barca',     hp: 8,  atk: 1, def: 1, move: 2, range: 1, cost: 3,  cls: 'naval', skills: ['barco', 'transporte'], tech: 'pesca', sea: ['rio', 'costa'], carry: 1 },
-    carabela:  { label: 'Carabela',  hp: 10, atk: 2, def: 2, move: 4, range: 1, cost: 6,  cls: 'naval', skills: ['barco', 'transporte', 'explorador'], tech: 'astilleros', sea: ['costa', 'mar'], carry: 2 },
-    galeon:    { label: 'Galeón de guerra', hp: 20, atk: 4, def: 3, move: 2, range: 2, cost: 12, cls: 'naval', skills: ['barco', 'distancia'], tech: 'armada', sea: ['costa', 'mar'], carry: 0 },
+    barca:     { label: 'Barca',     hp: 8,  atk: 1, def: 1, move: 3, range: 1, cost: 5,  cls: 'naval', skills: ['barco', 'transporte'], tech: 'pesca', sea: ['rio', 'costa'], carry: 2 },
+    carabela:  { label: 'Carabela',  hp: 10, atk: 2, def: 2, move: 4, range: 1, cost: 9,  cls: 'naval', skills: ['barco', 'transporte', 'explorador'], tech: 'astilleros', sea: ['costa', 'mar'], carry: 2 },
+    galeon:    { label: 'Galeón de guerra', hp: 20, atk: 4, def: 3, move: 2, range: 2, cost: 18, cls: 'naval', skills: ['barco', 'distancia'], tech: 'armada', sea: ['costa', 'mar'], carry: 0 },
   };
-  const ARMIES = { real: ['miliciano'], prueba: ['miliciano', 'arquero', 'jinete'] };
+  const ARMIES = { real: ['colono', 'miliciano'], prueba: ['miliciano', 'arquero', 'jinete'] };
   const has = (u, skill) => UNITS[u.type].skills.includes(skill);
   const isShip = (u) => !!UNITS[u.type].sea;
   const sails = (u, t) => !!t && UNITS[u.type].sea.includes(t.terrain);
@@ -100,7 +106,8 @@
     maxLevel: 7,
     levelCost: (level) => 3 * level,    // oro para pasar del nivel "level" al siguiente
     levelNeeds: (level) => level,       // edificios que hacen falta en su territorio para subir
-    expandCost: 8, expandLevel: 3,      // ampliar el territorio (un anillo más de casillas)
+    expandCost: 8, expandTech: 'caza',  // ampliar el territorio (un anillo más de casillas): pide esa tecnología
+    settlerStep: 3,                     // el colono cuesta 3 más por cada ciudad tuya aparte de la capital y por cada colono tuyo
     fortCost: 5, fortDefense: 2,        // fortificación: defensa extra a la tropa que defiende la ciudad
     roadCost: 2,                        // camino en una casilla
     roadBonus: 1,                       // oro extra por cada ciudad unida a la capital (y lo mismo para la capital)
@@ -189,7 +196,7 @@
         if (!s) return;
         taken.add(key(s.col, s.row));
         const u = makeUnit(game, type, p, s.col, s.row);
-        if (army === ARMIES.real) u.home = city.id; // las tropas de la prueba no ocupan sitio en la ciudad
+        if (army === ARMIES.real && type !== 'colono') u.home = city.id; // las de la prueba y el colono del principio no ocupan sitio
         game.units.push(u);
       });
     });
@@ -361,7 +368,7 @@
   function expandProblem(game, map, city) {
     if (city.owner !== game.turn) return 'No es tu ciudad.';
     if (city.expanded) return 'Ya está ampliada.';
-    if (cityLevel(game, map, city) < ECON.expandLevel) return `Para ampliar el territorio la ciudad tiene que ser nivel ${ECON.expandLevel}.`;
+    if (!hasTech(game, city.owner, ECON.expandTech)) return `Necesitas la tecnología ${TECHS[ECON.expandTech].label} (rama ${branchLabel(ECON.expandTech)}).`;
     if (!expandTiles(game, map, city).length) return 'No quedan casillas libres alrededor.';
     if (game.players[game.turn].gold < ECON.expandCost) return `Te falta oro para ampliar (cuesta ${ECON.expandCost}).`;
     return null;
@@ -380,7 +387,7 @@
   function fortProblem(game, map, city) {
     if (city.owner !== game.turn) return 'No es tu ciudad.';
     if (city.fort) return 'Ya está fortificada.';
-    if (!hasTech(game, city.owner, 'fortificacion')) return 'Necesitas la tecnología Fortificación (rama Guerra).';
+    if (!hasTech(game, city.owner, 'fortificacion')) return 'Necesitas la tecnología Fortificación (rama Defensa).';
     if (game.players[game.turn].gold < ECON.fortCost) return `Te falta oro para fortificar (cuesta ${ECON.fortCost}).`;
     return null;
   }
@@ -534,7 +541,7 @@
     if (structAt(game, t.col, t.row)) return 'Ya hay una muralla o una torre.';
     if (game.buildings[key(t.col, t.row)]) return 'Hay un edificio.';
     if (kind === 'torre' && game.roads[key(t.col, t.row)]) return 'Hay un camino.';
-    if (!hasTech(game, game.turn, 'fortificacion')) return 'Necesitas la tecnología Fortificación (rama Guerra).';
+    if (!hasTech(game, game.turn, 'murallas')) return 'Necesitas la tecnología Murallas (rama Defensa).';
     const owner = ownerOfTile(game, t.col, t.row);
     if (owner && owner.owner !== game.turn) return 'Es territorio enemigo.';
     const u = unitAt(game, t.col, t.row);
@@ -779,6 +786,15 @@
     return rt;
   }
 
+  // Precio de una tropa en comida. El colono se encarece con cada ciudad (aparte de la capital) y cada colono que ya tienes.
+  function unitCost(game, owner, type) {
+    let cost = UNITS[type].cost;
+    if (type === 'colono') {
+      const more = game.cities.filter(c => c.owner === owner && !c.capital).length + game.units.filter(u => u.owner === owner && u.type === 'colono').length;
+      cost += ECON.settlerStep * more;
+    }
+    return cost;
+  }
   // ¿Puede esta ciudad reclutar esta tropa? null si sí, o el motivo.
   function recruitProblem(game, map, city, type) {
     if (city.owner !== game.turn) return 'No es tu ciudad.';
@@ -793,12 +809,13 @@
       if (!docks.some(t => !unitAt(game, t.col, t.row))) return 'El muelle está ocupado: mueve antes el barco que hay en él.';
     } else if (unitAt(game, city.col, city.row)) return 'Hay una tropa en la ciudad: muévela primero.';
     if (cityUnits(game, city).length >= cityCapacity(game, map, city)) return `Esta ciudad ya tiene ${cityCapacity(game, map, city)} tropas (súbela de nivel para tener más).`;
-    if (game.players[game.turn].food < UNITS[type].cost) return `Te falta comida (cuesta ${UNITS[type].cost}).`;
+    const cost = unitCost(game, city.owner, type);
+    if (game.players[game.turn].food < cost) return `Te falta comida (cuesta ${cost}).`;
     return null;
   }
   function recruit(game, map, city, type) {
     if (recruitProblem(game, map, city, type)) return null;
-    game.players[game.turn].food -= UNITS[type].cost;
+    game.players[game.turn].food -= unitCost(game, city.owner, type);
     const at = UNITS[type].sea ? cityDocks(game, map, city, type).find(t => !unitAt(game, t.col, t.row)) : city;
     const u = makeUnit(game, type, city.owner, at.col, at.row);
     u.home = city.id; u.moved = true; u.acted = true; // la tropa nueva espera al turno siguiente
@@ -1156,7 +1173,7 @@
     repairProblem, repair, structTargets, structDamage, hitStruct, wallBonus, visibleTo, markExplored, isExplored,
     defenseBonus, demolishOptions, demolishProblem, demolish, dismiss,
     tradeProblem, trade, routePath, routeGold, routeProblem, openRoute, routeCities,
-    isShip, sails, passengers, shipRoom, shipOf, cityDocks, seaPath };
+    unitCost, isShip, sails, passengers, shipRoom, shipOf, cityDocks, seaPath };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PERules = api;
 })(this);

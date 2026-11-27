@@ -228,7 +228,7 @@
           const code = Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
           const doc = { code, status: 'sala', host: myUid(), created: Date.now(), uids: [myUid()],
             seats: [{ uid: myUid(), name: local.get('name', '?'), faction: 0 }],
-            settings: { size: $('net-size').value, type: $('net-type').value, abundance: $('net-ab').value, limit: Number($('net-limit').value) },
+            settings: { size: $('net-size').value, type: $('net-type').value, abundance: $('net-ab').value, limit: Number($('net-limit').value), gen: M.GEN },
             seed: '', game: '', n: 0, turnStart: 0, turnUid: '' };
           try { await commit([create(`partidas/${code}`, doc)]); net.busy = false; return openGame(code); }
           catch (e) { if (e.code !== 'ALREADY_EXISTS') throw e; }
@@ -344,7 +344,7 @@
       const seats = doc.seats.slice();
       for (let i = seats.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [seats[i], seats[j]] = [seats[j], seats[i]]; }
       const s = doc.settings;
-      const map = M.generate({ size: s.size, type: s.type, abundance: s.abundance, players: seats.length });
+      const map = M.generate({ size: s.size, type: s.type, abundance: s.abundance, players: seats.length, gen: s.gen || 1 });
       const game = R.newGame({ map, players: seats.map(x => x.faction), army: CFG.demo ? 'prueba' : 'real', close: !!CFG.demo });
       await commit([upd(`partidas/${code}`, { status: 'jugando', seats, uids: seats.map(x => x.uid), seed: map.seed,
         game: JSON.stringify(game), n: 0, turnStart: Date.now(), turnUid: seats[0].uid }, doc._time)]);
@@ -359,7 +359,7 @@
   async function showMap(doc, intro) {
     const me = doc.seats.findIndex(s => s.uid === myUid());
     const names = doc.seats.map(s => s.name), s = doc.settings;
-    const base = { online: true, me, names, seed: doc.seed, size: s.size, type: s.type, abundance: s.abundance, armies: 'real',
+    const base = { online: true, me, names, seed: doc.seed, size: s.size, type: s.type, abundance: s.abundance, gen: s.gen || 1, armies: 'real',
       players: doc.seats.map(x => x.faction) };
     hidePanel();
     document.body.classList.add('online-game');
@@ -395,7 +395,7 @@
     const draft = local.get('turn.' + doc.code, null);
     let orders = [];
     if (draft && draft.n === doc.n && current.turn === me) {
-      const map = M.generate({ seed: doc.seed, size: s.size, type: s.type, abundance: s.abundance, players: doc.seats.length });
+      const map = M.generate({ seed: doc.seed, size: s.size, type: s.type, abundance: s.abundance, players: doc.seats.length, gen: s.gen || 1 });
       R.applyCleared(current, map);
       for (const o of draft.orders) if (R.perform(current, map, o)) orders.push(o);
     }
@@ -462,10 +462,10 @@
     const st = window.PEState, doc = net.doc, s = doc.settings;
     const orders = st.orders.filter(o => o.a !== 'end');
     const game = JSON.parse(net.start);
-    const map = M.generate({ seed: doc.seed, size: s.size, type: s.type, abundance: s.abundance, players: doc.seats.length });
+    const map = M.generate({ seed: doc.seed, size: s.size, type: s.type, abundance: s.abundance, players: doc.seats.length, gen: s.gen || 1 });
     R.applyCleared(game, map);
     orders.forEach(o => R.perform(game, map, o));
-    G().startGame({ online: true, me: st.me, names: st.names, seed: doc.seed, size: s.size, type: s.type, abundance: s.abundance,
+    G().startGame({ online: true, me: st.me, names: st.names, seed: doc.seed, size: s.size, type: s.type, abundance: s.abundance, gen: s.gen || 1,
       armies: 'real', players: doc.seats.map(x => x.faction), game, orders });
   }
 
@@ -488,7 +488,7 @@
     if (Date.now() < doc.turnStart + doc.settings.limit * 3600000) return;
     const s = doc.settings, game = JSON.parse(doc.game);
     if (game.turn === doc.seats.findIndex(x => x.uid === myUid())) return; // el que va tarde aún puede terminar si nadie lo pasa
-    const map = M.generate({ seed: doc.seed, size: s.size, type: s.type, abundance: s.abundance, players: doc.seats.length });
+    const map = M.generate({ seed: doc.seed, size: s.size, type: s.type, abundance: s.abundance, players: doc.seats.length, gen: s.gen || 1 });
     R.applyCleared(game, map);
     const player = game.turn;
     R.perform(game, map, { a: 'end' });
