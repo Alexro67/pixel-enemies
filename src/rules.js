@@ -327,7 +327,6 @@
     if (u.acted) return 'Este colono acaba de salir; podrá fundar en tu próximo turno.';
     const t = M.tileAt(map, u.col, u.row);
     if (!ECON.foundOn.includes(t.terrain)) return 'Solo se puede fundar en llanura o bosque.';
-    if (t.resource) return 'Aquí hay un recurso: busca una casilla sin recurso.';
     if (game.territory[key(t.col, t.row)]) return 'Esta casilla ya es territorio de una ciudad.';
     for (const c of game.cities) {
       const d = M.distance(c.col, c.row, t.col, t.row);
@@ -339,6 +338,9 @@
   function found(game, map, u) {
     if (foundProblem(game, map, u)) return null;
     game.units = game.units.filter(x => x !== u);
+    // Si había un recurso debajo, desaparece al construir la ciudad (Alex, opción A).
+    const t = M.tileAt(map, u.col, u.row);
+    if (t.resource) { game.cleared = game.cleared || {}; game.cleared[key(t.col, t.row)] = true; t.resource = null; }
     return addCity(game, map, u.owner, u.col, u.row, false);
   }
 
@@ -540,7 +542,11 @@
       || (u.type === 'colono' && !foundProblem(game, map, u));
   }
 
-  const api = { UNITS, SKILLS, CLASSES, TECH_TERRAIN, ARMIES, GROUND, ECON, BUILDINGS, RECRUITABLE, has, visionOf, newGame, unitAt, reachable, targets, preview, move, attack,
+  // Al cargar una partida guardada: quita del mapa los recursos que se perdieron al fundar ciudades.
+  function applyCleared(game, map) {
+    for (const k of Object.keys(game.cleared || {})) { const [c, r] = k.split(',').map(Number); const t = M.tileAt(map, c, r); if (t) t.resource = null; }
+  }
+  const api = { applyCleared, UNITS, SKILLS, CLASSES, TECH_TERRAIN, ARMIES, GROUND, ECON, BUILDINGS, RECRUITABLE, has, visionOf, newGame, unitAt, reachable, targets, preview, move, attack,
     endTurn, defenseOf, terrainDef, weak, canDoSomething, key,
     cityAt, cityById, ownerOfTile, cityTiles, cityLevel, cityIncome, playerIncome, cityUnits, cityCapacity,
     foundProblem, found, buildOption, build, buildingFor, recruitProblem, recruit, healProblem, healAmount, heal,

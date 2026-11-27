@@ -95,6 +95,7 @@
       const map = M.generate({ seed: saved.seed, size: state.size, type: state.type, abundance: state.abundance, players: PLAYERS.length });
       state.map = map;
       state.game = saved.game || R.newGame({ map, players: PLAYERS, close: state.armies === 'prueba', army: state.armies });
+      R.applyCleared(state.game, map);
       this.drawMap();
       this.drawUnits();
       this.applyFog();
