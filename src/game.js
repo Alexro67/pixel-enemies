@@ -31,8 +31,31 @@
   const unitName = (u) => `${R.UNITS[u.type].label} de ${nameOf(u.owner)}`;
   // La capital se llama como la facción; las demás llevan un número (Irun 2, Irun 3...).
   const cityName = (c) => FACTION_NAMES[state.game.players[c.origin].faction] + (c.number > 1 ? ' ' + c.number : '');
+  // Números del daño que vas a hacer: con fondo oscuro, para que se lean encima de cualquier cosa.
+  const DMG_STYLE = { fontFamily: 'monospace', fontStyle: 'bold', fontSize: '11px', color: '#fff4ee', backgroundColor: '#7a1410', padding: { x: 3, y: 1 } };
   const citySize = (lvl) => (lvl <= 2 ? 1 : lvl <= 4 ? 2 : 3);
   // Vecinos en el orden E, O, NO, NE, SO, SE (el mismo que usan los dibujos).
+  function roadMask(t) {
+    let mask = 0;
+    sideNeighbors(t.col, t.row).forEach(([c, r], i) => { if (R.hasRoad(state.game, c, r)) mask |= 1 << i; });
+    return mask;
+  }
+  // Casilla con edificio y camino: suelo, luego el camino, y encima lo que el edificio cambia del suelo.
+  function roadUnder(ground, built, road) {
+    const w = built.width, h = built.height, cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d');
+    const read = (img) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.drawImage(img, 0, 0); return x.getImageData(0, 0, w, h).data; };
+    const g = read(ground), b = read(built);
+    ctx.drawImage(ground, 0, 0); ctx.drawImage(road, 0, 0);
+    const out = ctx.getImageData(0, 0, w, h), d = out.data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (g[i] === b[i] && g[i + 1] === b[i + 1] && g[i + 2] === b[i + 2] && g[i + 3] === b[i + 3]) continue;
+      d[i] = b[i]; d[i + 1] = b[i + 1]; d[i + 2] = b[i + 2]; d[i + 3] = b[i + 3];
+    }
+    ctx.putImageData(out, 0, 0);
+    return cv;
+  }
   function sideNeighbors(col, row) {
     const odd = row & 1;
     const dirs = odd ? [[1, 0], [-1, 0], [0, -1], [1, -1], [0, 1], [1, 1]] : [[1, 0], [-1, 0], [-1, -1], [0, -1], [-1, 1], [0, 1]];
@@ -143,7 +166,14 @@
         if (b && t.terrain !== 'rio') {
           const key = `t_${t.terrain}_${t.resource || 'nada'}_${variant(t)}_${b}`;
           if (!this.textures.exists(key)) this.addTex(key, T.makeTerrainCanvas(t.terrain, t.resource, variant(t), 0, b));
-          return key;
+          if (!state.game.roads[R.key(t.col, t.row)]) return key;
+          // Con camino: el camino va por el suelo y el edificio se dibuja encima (así no lo tapa).
+          const mask = roadMask(t), rkey = `${key}_r${mask}`;
+          if (!this.textures.exists(rkey)) {
+            const ground = this.textures.get(`t_${t.terrain}_${t.resource || 'nada'}_${variant(t)}`).getSourceImage();
+            this.addTex(rkey, roadUnder(ground, this.textures.get(key).getSourceImage(), T.makeRoadCanvas(mask, false)));
+          }
+          return rkey;
         }
         if (t.terrain !== 'rio') return `t_${t.terrain}_${t.resource || 'nada'}_${variant(t)}`;
         // Los ríos se dibujan según hacia dónde siguen (otro río o el mar).
@@ -206,8 +236,8 @@
       // Caminos (en el río, puentes).
       for (const t of map.tiles) {
         if (t.hidden || !game.roads[R.key(t.col, t.row)]) continue;
-        let mask = 0;
-        sideNeighbors(t.col, t.row).forEach(([c, r], i) => { if (R.hasRoad(game, c, r)) mask |= 1 << i; });
+        if (game.buildings[R.key(t.col, t.row)] && t.terrain !== 'rio') continue; // ya va dibujado debajo del edificio
+        const mask = roadMask(t);
         const bridge = t.terrain === 'rio' ? 1 : 0, key = `road_${mask}_${bridge}`;
         if (!this.textures.exists(key)) this.addTex(key, T.makeRoadCanvas(mask, !!bridge));
         const img = this.add.image(T.tileOrigin(t.col, t.row).x, T.tileOrigin(t.col, t.row).y, key).setOrigin(0, 0).setDepth(t.row + 0.25);
@@ -380,8 +410,7 @@
           const img = this.add.image(o.x, this.tileY(M.tileAt(map, e.col, e.row)), 'hl_attack').setOrigin(0, 0).setDepth(e.row + 0.5);
           // Cuánto le quitarías (y cuánto te devolvería), antes de atacar.
           const txt = this.add.text(o.x + T.W / 2 - 14, o.y + T.TOP + T.H - 12, `-${pv.dealt}` + (pv.back ? ` ↩${pv.back}` : '') + (pv.burns.length ? ` 🔥${pv.burns.length}` : ''),
-            { fontFamily: 'monospace', fontStyle: 'bold', fontSize: '10px', color: '#ffe0d8', stroke: '#5a0d08', strokeThickness: 3 })
-            .setResolution(6).setOrigin(0.5, 0.5).setDepth(e.row + 0.9);
+            DMG_STYLE).setResolution(6).setOrigin(0.5, 0.5).setDepth(995); // por encima de todo, para que siempre se lea
           this.layer.add([img, txt]); this.hlLayer.push(img, txt);
         }
         // Murallas y torres enemigas que puede golpear.
@@ -390,8 +419,7 @@
           const o = T.tileOrigin(s.col, s.row);
           const img = this.add.image(o.x, o.y, 'hl_attack').setOrigin(0, 0).setDepth(s.row + 0.5);
           const txt = this.add.text(o.x + T.W / 2 - 14, o.y + T.TOP + T.H - 12, `-${Math.min(s.hp, R.structDamage(u))}`,
-            { fontFamily: 'monospace', fontStyle: 'bold', fontSize: '10px', color: '#ffe0d8', stroke: '#5a0d08', strokeThickness: 3 })
-            .setResolution(6).setOrigin(0.5, 0.5).setDepth(s.row + 0.9);
+            DMG_STYLE).setResolution(6).setOrigin(0.5, 0.5).setDepth(995);
           this.layer.add([img, txt]); this.hlLayer.push(img, txt);
         }
       } else { this.moves = new Map(); this.targets = []; this.structTargets = []; }
@@ -1127,7 +1155,7 @@
         const lvlProblem = R.levelUpProblem(g, map, c);
         if (lvlProblem && lvl < E.maxLevel) txt += ` · ${lvlProblem}`;
         const upgrades = [];
-        if (lvl < E.maxLevel) upgrades.push({ label: `Subir a nivel ${lvl + 1} (${E.levelCost(lvl)} oro)`, main: !lvlProblem, disabled: !!lvlProblem, onClick: () => sc.doCity(c, 'nivel') });
+        if (lvl < E.maxLevel) upgrades.push({ label: `Subir a nivel ${lvl + 1} (${E.levelCost(lvl)} oro` + (R.levelFood(g, lvl) ? `, ${R.levelFood(g, lvl)} comida)` : ')'), main: !lvlProblem, disabled: !!lvlProblem, onClick: () => sc.doCity(c, 'nivel') });
         if (!c.expanded) upgrades.push({ label: `Ampliar territorio (${E.expandCost} oro)` + (R.hasTech(g, c.owner, E.expandTech) ? '' : ' 🔒'), disabled: !!R.expandProblem(g, map, c), onClick: () => sc.doCity(c, 'ampliar') });
         if (!c.fort) upgrades.push({ label: `Fortificar (${R.fortCost(g, c.owner)} oro)` + (R.hasTech(g, c.owner, 'fortificacion') ? '' : ' 🔒'), disabled: !!R.fortProblem(g, map, c), onClick: () => sc.doCity(c, 'fortificar') });
         if (R.cityHas(g, map, c, 'mercado')) {

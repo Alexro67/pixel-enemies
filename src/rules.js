@@ -188,6 +188,7 @@
     perLevel: { oro: 1, comida: 1 }, // lo que da cada ciudad por cada nivel, cada turno
     maxLevel: 7,
     levelCost: (level) => 3 * level,    // oro para pasar del nivel "level" al siguiente
+    levelFood: (level) => 2 * level,    // y comida (solo en partidas nuevas: Alex, para que la comida no se acumule)
     levelNeeds: (level) => level,       // edificios que hacen falta en su territorio para subir
     expandCost: 8, expandTech: 'caza',  // ampliar el territorio (un anillo más de casillas): pide esa tecnología
     settlerStep: 3,                     // el colono cuesta 3 más por cada ciudad tuya aparte de la capital y por cada colono tuyo
@@ -446,14 +447,17 @@
     const need = levelNeedsFor(game, city), have = cityBuildings(game, map, city).length;
     if (have < need) return `Para subir al nivel ${lvl + 1} necesita ${need} edificio${need > 1 ? 's' : ''} en su territorio (tiene ${have}).`;
     if (game.players[game.turn].gold < ECON.levelCost(lvl)) return `Te falta oro para subir de nivel (cuesta ${ECON.levelCost(lvl)}).`;
+    if (game.players[game.turn].food < levelFood(game, lvl)) return `Te falta comida para subir de nivel (cuesta ${levelFood(game, lvl)}).`;
     return null;
   }
+  function levelFood(game, level) { return game.factions ? ECON.levelFood(level) : 0; }
   function levelNeedsFor(game, city) {
     return Math.max(0, ECON.levelNeeds(cityLevel(null, null, city)) - (hasTech(game, city.owner, 'gremios') ? 1 : 0));
   }
   function levelUp(game, map, city) {
     if (levelUpProblem(game, map, city)) return false;
     game.players[game.turn].gold -= ECON.levelCost(cityLevel(game, map, city));
+    game.players[game.turn].food -= levelFood(game, cityLevel(game, map, city));
     city.level = cityLevel(game, map, city) + 1;
     return true;
   }
@@ -1366,7 +1370,7 @@
     cutDown(t);
     return true;
   }
-  const api = { canOfferFell, fellProblem, fell, roadCost, fortCost, structCost, FACTIONS, PERK_NUMBERS, perk, factionUnit, techDetails, TECHS, BRANCHES, hasTech, techCost, techProblem, research, techsOfBranch, branchLabel,
+  const api = { levelFood, canOfferFell, fellProblem, fell, roadCost, fortCost, structCost, FACTIONS, PERK_NUMBERS, perk, factionUnit, techDetails, TECHS, BRANCHES, hasTech, techCost, techProblem, research, techsOfBranch, branchLabel,
     blessTargets, blessProblem, bless, levelNeedsFor, applyCleared, perform, unitById, UNITS, SKILLS, CLASSES, TECH_TERRAIN, ARMIES, GROUND, ECON, BUILDINGS, RECRUITABLE, has, visionOf, newGame, unitAt, reachable, targets, preview, move, attack,
     endTurn, defenseOf, terrainDef, weak, canDoSomething, key,
     cityAt, cityById, ownerOfTile, cityTiles, cityLevel, cityIncome, playerIncome, cityUnits, cityCapacity,
