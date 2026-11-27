@@ -131,29 +131,27 @@
   });
 
   // --- Facciones -----------------------------------------------------------
-  // Cada una tiene un terreno favorito (sale cerca más a menudo), una ventaja y una tropa propia.
+  // Cada una tiene una ventaja pequeña (algo 1 más barato) y una tropa propia. El sitio de salida no depende de la facción.
   // Las ventajas solo valen en partidas nuevas (game.factions = true); las de antes siguen igual.
   const FACTIONS = [
-    { name: 'Hondarribia', color: '#d23b3b', emblem: 'castillo', fav: 'costa', unit: 'arcabucero', favText: 'costa',
-      perk: 'Capital amurallada: su capital empieza fortificada (+2 de defensa a quien la defiende)' },
-    { name: 'Irun', color: '#e8c021', emblem: 'puente', fav: 'rio', unit: 'contrabandista', favText: 'llanura junto a un río',
-      perk: 'Comerciantes: cada ruta de comercio da 1 oro más a sus ciudades' },
-    { name: 'Donosti', color: '#3b6fd2', emblem: 'concha', fav: 'bahia', unit: 'galeote', favText: 'bahía y mar',
-      perk: 'Marineros: sus barcos cuestan 2 de comida menos' },
-    { name: 'Lekumberri', color: '#3fa34d', emblem: 'pino', fav: 'sierra', unit: 'cazador', favText: 'montaña y bosque',
-      perk: 'Montañeses: el bosque y la montaña no paran a sus tropas' },
-    { name: 'Alli', color: '#8e4bc4', emblem: 'cueva', fav: 'montana', unit: 'guardian', favText: 'valle entre montañas',
-      perk: 'Ciudades de roca: para conquistarle una ciudad hay que aguantar dentro 2 turnos seguidos' },
-    { name: 'Leitza', color: '#ee8a2a', emblem: 'hacha', fav: 'bosque', unit: 'aizkolari', favText: 'bosque espeso',
-      perk: 'Leñadores y canteros: aserradero, mina y cantera le cuestan 1 de oro menos' },
+    { name: 'Hondarribia', color: '#d23b3b', emblem: 'castillo', unit: 'arcabucero', perk: 'Murallas y torres le cuestan 1 oro menos' },
+    { name: 'Irun', color: '#e8c021', emblem: 'puente', unit: 'contrabandista', perk: 'Los caminos y puentes le cuestan 1 oro en vez de 2' },
+    { name: 'Donosti', color: '#3b6fd2', emblem: 'concha', unit: 'galeote', perk: 'Sus barcos le cuestan 1 comida menos' },
+    { name: 'Lekumberri', color: '#3fa34d', emblem: 'pino', unit: 'cazador', perk: 'El puesto de caza le cuesta 1 oro menos' },
+    { name: 'Alli', color: '#8e4bc4', emblem: 'cueva', unit: 'guardian', perk: 'Fortificar una ciudad le cuesta 3 oro en vez de 5' },
+    { name: 'Leitza', color: '#ee8a2a', emblem: 'hacha', unit: 'aizkolari', perk: 'El aserradero le cuesta 1 oro menos' },
   ];
-  const PERK = { muralla: 0, rutas: 1, barcos: 2, monte: 3, roca: 4, obras: 5 };
-  const PERK_NUMBERS = { routeExtra: 1, shipDiscount: 2, buildDiscount: 1, siegeTurns: 2, bulwark: 2 };
+  const PERK = { muros: 0, caminos: 1, barcos: 2, caza: 3, fuerte: 4, aserradero: 5 };
+  const PERK_NUMBERS = { discount: 1, fortDiscount: 2, bulwark: 2 };
   // ¿Tiene este jugador la ventaja de su facción? (solo en partidas con facciones)
   function perk(game, owner, id) {
     const p = game && game.factions && game.players[owner];
     return !!p && p.faction === PERK[id];
   }
+  // Precios con la ventaja de la facción (Irun caminos, Alli fortificar, Hondarribia murallas y torres).
+  function roadCost(game, owner) { return ECON.roadCost - (perk(game, owner, 'caminos') ? PERK_NUMBERS.discount : 0); }
+  function fortCost(game, owner) { return ECON.fortCost - (perk(game, owner, 'fuerte') ? PERK_NUMBERS.fortDiscount : 0); }
+  function structCost(game, owner, kind) { return STRUCTS[kind].cost() - (perk(game, owner, 'muros') ? PERK_NUMBERS.discount : 0); }
   function factionUnit(game, owner, type) { // null si la puede reclutar, o el motivo
     const f = UNITS[type].faction;
     if (f === undefined) return null;
@@ -172,12 +170,11 @@
     return ground(t).walk;
   }
   // ¿Se para al entrar en esta casilla? (bosque, montaña y río paran; al dragón no; a la lamia, el agua no)
-  // Lekumberri: el bosque y la montaña no paran a sus tropas. El contrabandista vadea los ríos.
+  // El contrabandista vadea los ríos.
   function stopsAt(u, t, game) {
     if (UNITS[u.type].skills.includes('vuela')) return false;
     if (UNITS[u.type].skills.includes('anfibia') && (t.terrain === 'costa' || t.terrain === 'rio')) return false;
     if (UNITS[u.type].skills.includes('vado') && t.terrain === 'rio') return false;
-    if ((t.terrain === 'bosque' || t.terrain === 'montana') && perk(game, u.owner, 'monte')) return false;
     return !!ground(t).stop;
   }
   const sails = (u, t) => !!t && UNITS[u.type].sea.includes(t.terrain);
@@ -269,7 +266,7 @@
   function newGame(opts) {
     const map = opts.map, players = opts.players || [0, 1], army = ARMIES[opts.army] || ARMIES.real;
     const close = opts.close && players.length === 2; // con más de 2, cada uno en su sitio
-    const anchors = close ? closeAnchors(map, players.length) : favoriteStarts(map, players);
+    const anchors = close ? closeAnchors(map, players.length) : map.starts.slice(0, players.length);
     // En el modo de prueba se empieza con mucho oro y comida, para probarlo todo rápido.
     const rich = army === ARMIES.prueba ? 30 : 0;
     const game = { players: players.map(f => ({ faction: f, alive: true, techs: [], gold: ECON.startGold + rich, food: ECON.startFood + rich, founded: 0 })),
@@ -278,7 +275,6 @@
     const taken = new Set();
     anchors.forEach((a, p) => {
       const city = addCity(game, map, p, a.col, a.row, true);
-      if (perk(game, p, 'muralla')) city.fort = true; // Hondarribia: capital amurallada
       const spots = [M.tileAt(map, a.col, a.row)].concat(landAround(map, a, army.length + 1, new Set([key(a.col, a.row)])));
       army.forEach((type, k) => {
         const s = spots.find(x => x && !taken.has(key(x.col, x.row)));
@@ -318,50 +314,6 @@
       next.sort((x, y) => (ground(x).stop ? 1 : 0) - (ground(y).stop ? 1 : 0));
       next.forEach(x => { seen.add(key(x.col, x.row)); queue.push(x); });
     }
-    return out;
-  }
-
-  // Terreno favorito: cuánto le gusta a una facción la zona de alrededor de una casilla (2 casillas).
-  function favoriteScore(map, faction, col, row) {
-    const fav = FACTIONS[faction] ? FACTIONS[faction].fav : null;
-    let n = 0;
-    for (const t of map.tiles) {
-      const d = M.distance(t.col, t.row, col, row);
-      if (d < 1 || d > 2) continue;
-      const w = d === 1 ? 2 : 1; // lo de al lado cuenta el doble
-      if (fav === 'costa' && t.terrain === 'costa') n += w;
-      else if (fav === 'bahia' && (t.terrain === 'costa' || t.terrain === 'mar')) n += w;
-      else if (fav === 'rio' && t.terrain === 'rio') n += 2 * w;
-      else if (fav === 'rio' && t.terrain === 'llanura') n += 0.3 * w;
-      else if (fav === 'sierra' && (t.terrain === 'montana' || t.terrain === 'bosque')) n += w;
-      else if (fav === 'montana' && t.terrain === 'montana') n += 1.5 * w;
-      else if (fav === 'bosque' && t.terrain === 'bosque') n += w;
-    }
-    return Math.min(n, 12); // tampoco hace falta que esté todo lleno
-  }
-  // Cada jugador elige primero el punto de salida que más le gusta, y luego se acerca hasta 2
-  // casillas a un sitio mejor (sin quedar a menos de 6 casillas de nadie).
-  function favoriteStarts(map, players) {
-    const starts = map.starts.slice(0, players.length);
-    if (starts.length < players.length) return starts;
-    const left = starts.slice(), out = new Array(players.length);
-    const order = players.map((f, i) => i).sort((a, b) => a - b);
-    for (const i of order) {
-      left.sort((a, b) => favoriteScore(map, players[i], b.col, b.row) - favoriteScore(map, players[i], a.col, a.row));
-      out[i] = left.shift();
-    }
-    const spots = map.spots || [];
-    const minGap = Math.min(6, ...out.map((a, i) => Math.min(...out.filter((b, j) => j !== i).map(b => M.distance(a.col, a.row, b.col, b.row)))));
-    out.forEach((a, i) => {
-      let best = a, bestS = favoriteScore(map, players[i], a.col, a.row);
-      for (const s of spots) {
-        if (M.distance(s.col, s.row, a.col, a.row) > 2) continue;
-        if (out.some((b, j) => j !== i && M.distance(s.col, s.row, b.col, b.row) < minGap)) continue;
-        const sc = favoriteScore(map, players[i], s.col, s.row);
-        if (sc > bestS + 0.5) { best = s; bestS = sc; }
-      }
-      out[i] = { col: best.col, row: best.row };
-    });
     return out;
   }
 
@@ -458,7 +410,7 @@
   // Precio de un edificio en una ciudad (el taller los abarata 1 oro, menos a sí mismo).
   function buildCost(game, map, city, type) {
     let base = BUILDINGS[type].cost;
-    if (city && ['aserradero', 'mina', 'cantera'].includes(type) && perk(game, city.owner, 'obras')) base = Math.max(1, base - PERK_NUMBERS.buildDiscount);
+    if (city && ((type === 'aserradero' && perk(game, city.owner, 'aserradero')) || (type === 'caza' && perk(game, city.owner, 'caza')))) base = Math.max(1, base - PERK_NUMBERS.discount); // Leitza, Lekumberri
     return city && type !== 'taller' && cityHas(game, map, city, 'taller') ? Math.max(1, base - 1) : base;
   }
   function cityIncome(game, map, city) {
@@ -477,7 +429,7 @@
     for (const rt of game.routes || []) {
       if (rt.a !== city.id && rt.b !== city.id) continue;
       const g = routeGold(game, map, rt);
-      out.ruta += g + (g && perk(game, city.owner, 'rutas') ? PERK_NUMBERS.routeExtra : 0); // Irun: 1 más por ruta
+      out.ruta += g;
     }
     out.oro += out.ruta;
     return out;
@@ -525,12 +477,12 @@
     if (city.owner !== game.turn) return 'No es tu ciudad.';
     if (city.fort) return 'Ya está fortificada.';
     if (!hasTech(game, city.owner, 'fortificacion')) return 'Necesitas la tecnología Fortificación (rama Defensa).';
-    if (game.players[game.turn].gold < ECON.fortCost) return `Te falta oro para fortificar (cuesta ${ECON.fortCost}).`;
+    if (game.players[game.turn].gold < fortCost(game, city.owner)) return `Te falta oro para fortificar (cuesta ${fortCost(game, city.owner)}).`;
     return null;
   }
   function fortify(game, map, city) {
     if (fortProblem(game, map, city)) return false;
-    game.players[game.turn].gold -= ECON.fortCost;
+    game.players[game.turn].gold -= fortCost(game, city.owner);
     city.fort = true;
     return true;
   }
@@ -551,7 +503,7 @@
     if (st && st.kind === 'torre') return 'Hay una torre.';
     if (st && st.owner !== game.turn) return 'Hay una muralla de otro jugador.';
     if (!owner && !visibleTo(game, map, game.turn).has(key(t.col, t.row))) return 'Tienes que ver esa casilla (con una tropa, ciudad o torre tuya cerca).';
-    if (game.players[game.turn].gold < ECON.roadCost) return `Te falta oro (un camino cuesta ${ECON.roadCost}).`;
+    if (game.players[game.turn].gold < roadCost(game, game.turn)) return `Te falta oro (un camino cuesta ${roadCost(game, game.turn)}).`;
     return null;
   }
   function canOfferRoad(game, map, t) { // si tiene sentido enseñar el botón
@@ -562,7 +514,7 @@
   }
   function buildRoad(game, map, t) {
     if (roadProblem(game, map, t)) return false;
-    game.players[game.turn].gold -= ECON.roadCost;
+    game.players[game.turn].gold -= roadCost(game, game.turn);
     game.roads[key(t.col, t.row)] = true;
     return true;
   }
@@ -690,7 +642,7 @@
       const cities = game.cities.filter(c => c.owner === game.turn).length;
       if (mine >= cities) return `Puedes tener una torre por cada ciudad (tienes ${mine}).`;
     }
-    const cost = STRUCTS[kind].cost();
+    const cost = structCost(game, game.turn, kind);
     if (game.players[game.turn].gold < cost) return `Te falta oro (cuesta ${cost}).`;
     return null;
   }
@@ -702,7 +654,7 @@
   }
   function buildStruct(game, map, t, kind) {
     if (structProblem(game, map, t, kind)) return null;
-    game.players[game.turn].gold -= STRUCTS[kind].cost();
+    game.players[game.turn].gold -= structCost(game, game.turn, kind);
     structStore(game, kind)[key(t.col, t.row)] = { owner: game.turn, hp: STRUCTS[kind].hp() };
     return kind;
   }
@@ -931,7 +883,7 @@
       const more = game.cities.filter(c => c.owner === owner && !c.capital).length + game.units.filter(u => u.owner === owner && u.type === 'colono').length;
       cost += ECON.settlerStep * more;
     }
-    if (UNITS[type].sea && perk(game, owner, 'barcos')) cost = Math.max(1, cost - PERK_NUMBERS.shipDiscount);
+    if (UNITS[type].sea && perk(game, owner, 'barcos')) cost = Math.max(1, cost - PERK_NUMBERS.discount); // Donosti
     return cost;
   }
   // ¿Puede esta ciudad reclutar esta tropa? null si sí, o el motivo.
@@ -1222,14 +1174,7 @@
     game.cities.forEach(c => { if (c.owner === next) c.trades = 0; });
     for (const c of game.cities) {
       const u = unitAt(game, c.col, c.row);
-      if (c.siegeBy === next && (!u || u.owner !== next)) { delete c.siege; delete c.siegeBy; } // el asedio se levanta
       if (!u || u.owner !== next || c.owner === next) continue;
-      // Alli: sus ciudades aguantan; hay que seguir dentro al empezar 2 turnos seguidos.
-      if (perk(game, c.owner, 'roca')) {
-        c.siege = (c.siegeBy === next ? c.siege || 0 : 0) + 1; c.siegeBy = next;
-        if (c.siege < PERK_NUMBERS.siegeTurns) { game.events.push({ kind: 'asedio', city: c.id, from: c.owner, to: next }); continue; }
-      }
-      delete c.siege; delete c.siegeBy;
       const from = c.owner;
       c.owner = next; c.capital = false;
       game.units.forEach(x => { if (x.home === c.id) x.home = null; }); // las tropas que salieron de allí ya no cuentan
@@ -1385,7 +1330,7 @@
     ensure(game);
     for (const k of Object.keys(game.cleared || {})) { const [c, r] = k.split(',').map(Number); const t = M.tileAt(map, c, r); if (t) t.resource = null; }
   }
-  const api = { FACTIONS, PERK_NUMBERS, perk, factionUnit, favoriteScore, techDetails, TECHS, BRANCHES, hasTech, techCost, techProblem, research, techsOfBranch, branchLabel,
+  const api = { roadCost, fortCost, structCost, FACTIONS, PERK_NUMBERS, perk, factionUnit, techDetails, TECHS, BRANCHES, hasTech, techCost, techProblem, research, techsOfBranch, branchLabel,
     blessTargets, blessProblem, bless, levelNeedsFor, applyCleared, perform, unitById, UNITS, SKILLS, CLASSES, TECH_TERRAIN, ARMIES, GROUND, ECON, BUILDINGS, RECRUITABLE, has, visionOf, newGame, unitAt, reachable, targets, preview, move, attack,
     endTurn, defenseOf, terrainDef, weak, canDoSomething, key,
     cityAt, cityById, ownerOfTile, cityTiles, cityLevel, cityIncome, playerIncome, cityUnits, cityCapacity,

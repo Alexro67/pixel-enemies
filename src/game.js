@@ -1082,13 +1082,13 @@
         const lock = R.hasTech(gm, gm.turn, 'murallas') ? '' : ' 🔒';
         for (const kind of ['muralla', 'torre']) {
           const problem = R.structProblem(gm, map, t, kind);
-          actions.push({ label: `${R.STRUCTS[kind].label} (${R.STRUCTS[kind].cost()} oro)${lock}`, disabled: !!problem, onClick: () => sc.doStruct(t, kind) });
+          actions.push({ label: `${R.STRUCTS[kind].label} (${R.structCost(gm, gm.turn, kind)} oro)${lock}`, disabled: !!problem, onClick: () => sc.doStruct(t, kind) });
           if (problem && kind === 'torre' && /una torre/.test(problem)) txt += ` · ${problem}`;
         }
       }
       if (R.canOfferRoad(gm, map, t)) {
         const problem = R.roadProblem(gm, map, t);
-        actions.push({ label: `${t.terrain === 'rio' ? 'Puente' : 'Camino'} (${R.ECON.roadCost} oro)` + (R.hasTech(gm, gm.turn, 'caza') ? '' : ' 🔒'), disabled: !!problem, onClick: () => window.PEGame.doRoad(t) });
+        actions.push({ label: `${t.terrain === 'rio' ? 'Puente' : 'Camino'} (${R.roadCost(gm, gm.turn)} oro)` + (R.hasTech(gm, gm.turn, 'caza') ? '' : ' 🔒'), disabled: !!problem, onClick: () => window.PEGame.doRoad(t) });
         if (problem && !opt) txt += ` · ${problem}`;
       }
       ui.setActions(actions);
@@ -1108,10 +1108,7 @@
       txt += ` · Edificios ${R.cityTiles(g, map, c).filter(t => g.buildings[R.key(t.col, t.row)]).length}`;
       if (c.fort) txt += ` · Fortificada (+${R.ECON.fortDefense} defensa)`;
       const occupier = R.unitAt(g, c.col, c.row);
-      const rock = R.perk(g, c.owner, 'roca');
-      if (occupier && occupier.owner !== c.owner) txt += ` · ¡Ocupada por ${unitName(occupier)}! ` + (rock
-        ? (c.siege && c.siegeBy === occupier.owner ? 'Ya aguantó un turno dentro: si sigue al empezar su turno, la conquista.' : 'Ciudad de roca: tiene que seguir dentro al empezar 2 turnos suyos seguidos para conquistarla.')
-        : 'Si sigue aquí al empezar su turno, la conquista.');
+      if (occupier && occupier.owner !== c.owner) txt += ` · ¡Ocupada por ${unitName(occupier)}! Si sigue aquí al empezar su turno, la conquista.`;
       if (c.owner === g.turn) {
         const sc = window.PEGame, E = R.ECON;
         const lvlProblem = R.levelUpProblem(g, map, c);
@@ -1119,7 +1116,7 @@
         const upgrades = [];
         if (lvl < E.maxLevel) upgrades.push({ label: `Subir a nivel ${lvl + 1} (${E.levelCost(lvl)} oro)`, main: !lvlProblem, disabled: !!lvlProblem, onClick: () => sc.doCity(c, 'nivel') });
         if (!c.expanded) upgrades.push({ label: `Ampliar territorio (${E.expandCost} oro)` + (R.hasTech(g, c.owner, E.expandTech) ? '' : ' 🔒'), disabled: !!R.expandProblem(g, map, c), onClick: () => sc.doCity(c, 'ampliar') });
-        if (!c.fort) upgrades.push({ label: `Fortificar (${E.fortCost} oro)` + (R.hasTech(g, c.owner, 'fortificacion') ? '' : ' 🔒'), disabled: !!R.fortProblem(g, map, c), onClick: () => sc.doCity(c, 'fortificar') });
+        if (!c.fort) upgrades.push({ label: `Fortificar (${R.fortCost(g, c.owner)} oro)` + (R.hasTech(g, c.owner, 'fortificacion') ? '' : ' 🔒'), disabled: !!R.fortProblem(g, map, c), onClick: () => sc.doCity(c, 'fortificar') });
         if (R.cityHas(g, map, c, 'mercado')) {
           for (const to of ['oro', 'comida'])
             upgrades.push({ label: to === 'oro' ? '2 comida → 1 oro' : '2 oro → 1 comida', disabled: !!R.tradeProblem(g, map, c, to), onClick: () => sc.doTrade(c, to) });
@@ -1203,7 +1200,6 @@
         if (e.kind === 'eliminado') return `${nameOf(e.player)} ha perdido su última ciudad y queda eliminado.`;
         if (e.kind === 'cobro') return `Cobras ${e.oro} de oro y ${e.comida} de comida.`;
         if (e.kind === 'templo') return `Los templos curan a ${e.n} tropa${e.n > 1 ? 's' : ''}.`;
-        if (e.kind === 'asedio') return `${cityName(R.cityById(g, e.city))} es una ciudad de roca de Alli y aguanta: si tu tropa sigue dentro en tu próximo turno, la conquistas.`;
         return '';
       }).filter(Boolean).join(' ');
       // Aviso si hay enemigos dentro de una de tus ciudades.
@@ -1256,7 +1252,6 @@
       const stats = `vida ${u.hp} · ataque ${u.atk} · defensa ${u.def} · mueve ${u.move}` + (u.range > 1 ? ` · dispara a ${u.range}` : '') + (u.carry ? ` · lleva ${u.carry} tropa` : '') + ` · ${u.cost} comida · pide ${R.TECHS[u.tech].label}`;
       return `<div class="fcard" style="border-color:${F.color}">
         <div class="fhead">${flag ? `<img src="${flag}" alt="">` : ''}<b style="color:${F.color}">${esc(F.name)}</b></div>
-        <div><b>Terreno favorito:</b> ${esc(F.favText)}</div>
         <div><b>Ventaja:</b> ${esc(F.perk)}.</div>
         <div class="funit">${pic ? `<img src="${pic}" alt="">` : ''}<div><b>Tropa propia: ${esc(u.label)}</b><br>${esc(stats)}${skills.length ? '<br>' + esc(skills.join(', ')) : ''}</div></div>
       </div>`;
