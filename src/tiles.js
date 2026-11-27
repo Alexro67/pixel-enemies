@@ -394,7 +394,7 @@
 
   // --- Ciudades ------------------------------------------------------------------
   // Tamaño según el nivel: 1-2 aldea, 3-4 villa con empalizada, 5-7 ciudad con torre.
-  function makeCityCanvas(color, size, capital) {
+  function makeCityCanvas(color, size, capital, fort) {
     const p = new Pix(TW, TH), oy = TOP;
     const [r, g, b] = hex2rgb(color);
     const roof = [[Math.min(255, r + 60), Math.min(255, g + 60), Math.min(255, b + 60)], [r, g, b], [r * 0.6, g * 0.6, b * 0.6].map(Math.round)];
@@ -418,7 +418,27 @@
       for (let k = 0; k < 22; k += 4) p.rect(tx, ty - 22 + k, 9, 1, '#b4ae9f');
     }
     houses.sort((a, b) => a[1] - b[1]).forEach(([x, y, w, h]) => house(p, x, oy + y, w, h, roof));
-    if (size >= 2) {
+    if (fort) {
+      // fortificación: muralla de piedra con almenas por delante y dos torres en las esquinas
+      const wallY = (x) => H - 5 - Math.abs(x + 0.5 - W / 2) * (H / 4) / (W / 2) * 0.9;
+      for (let x = 5; x < W - 5; x++) {
+        const y = Math.round(wallY(x));
+        if (edgeDist(x, y) < 2) continue;
+        const top = oy + y - 8;
+        for (let j = 0; j < 8; j++) p.set(x, top + j, j === 0 ? '#e6e1d4' : (x + Math.floor((j + (x >> 2)) / 3)) % 7 === 0 ? '#8f897b' : '#bdb6a6');
+        p.set(x, top + 8, '#55524a');
+        if (x % 4 < 2) { p.set(x, top - 1, '#d4cfc0'); p.set(x, top - 2, '#e6e1d4'); }
+      }
+      for (const tx of [7, W - 13]) {
+        const y = Math.round(wallY(tx + 3)), top = oy + y - 15;
+        p.rect(tx, top, 7, 15, '#c9c3b4'); p.rect(tx + 5, top, 2, 15, '#9e988a');
+        for (let k = 0; k < 4; k++) p.rect(tx + k * 2, top - 2, 1, 2, '#d8d2c4');
+        p.rect(tx + 2, top + 4, 2, 3, '#2a2030');
+      }
+      // puerta
+      const gy = oy + Math.round(wallY(W / 2));
+      p.rect(W / 2 - 3, gy - 7, 6, 7, '#3a2a20'); p.rect(W / 2 - 3, gy - 8, 6, 1, '#8f897b');
+    } else if (size >= 2) {
       // empalizada (o muralla de piedra en las grandes) por delante
       for (let x = 4; x < W - 4; x += 3) {
         const y = H - 6 - Math.abs(x + 1.5 - W / 2) * (H / 4) / (W / 2) * 0.9;
@@ -451,6 +471,36 @@
       else if (near < 4.2) p.set(x, TOP + y, [r, g, b], 235);
       else if (near < 6) p.set(x, TOP + y, [r, g, b], 70);
       else if ((x + y) % 4 === 0) p.set(x, TOP + y, [r, g, b], 40);
+    }
+    return p.done();
+  }
+
+  // Camino de tierra desde el centro hacia los lados que tocan otro camino o ciudad (mask: E, O, NO, NE, SO, SE).
+  // En un río se dibuja como un puente de tablas.
+  function makeRoadCanvas(mask, bridge, drop) {
+    const p = new Pix(TW, TH), oy = TOP + (drop || 0);
+    const ends = [[W - 2, H / 2], [2, H / 2], [W / 4 + 1, H / 8 + 1], [W * 3 / 4 - 1, H / 8 + 1], [W / 4 + 1, H * 7 / 8 - 1], [W * 3 / 4 - 1, H * 7 / 8 - 1]];
+    const cx = W / 2, cy = H / 2;
+    const segs = ends.filter((e, i) => mask & (1 << i));
+    const near = (x, y) => {
+      let best = Math.hypot(x - cx, y - cy) * (segs.length ? 1.6 : 0.8);
+      for (const [ex, ey] of segs) {
+        const vx = ex - cx, vy = ey - cy, t = Math.max(0, Math.min(1, ((x - cx) * vx + (y - cy) * vy) / (vx * vx + vy * vy)));
+        best = Math.min(best, Math.hypot(x - cx - vx * t, y - cy - vy * t));
+      }
+      return best;
+    };
+    const rr = makeRng(mask * 31 + 7);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (!insideHex(x, y)) continue;
+      const d = near(x + 0.5, y + 0.5);
+      if (bridge) {
+        if (d < 4.5) p.set(x, oy + y, d > 3.6 ? C.woodD : (Math.round(x * 0.9 + y * 0.5) % 3 === 0 ? C.woodD : C.wood));
+        else if (d < 5.5) p.set(x, oy + y, '#3a2614', 160);
+      } else if (d < 3.4) {
+        const v = rr();
+        p.set(x, oy + y, v < 0.12 ? '#a8885a' : v < 0.2 ? '#d8c08e' : d > 2.5 ? '#b0905e' : '#c6a774');
+      } else if (d < 4.4) p.set(x, oy + y, '#6a7a3a', 140);
     }
     return p.done();
   }
@@ -621,6 +671,6 @@
 
   root.PETiles = {
     W, H, TW, TH, TOP, SIDE, WATER_DROP, ROW_STEP, COL_STEP, VARIANTS,
-    makeTerrainCanvas, makeCityCanvas, makeBorderCanvas, makeFogCanvas, makeOutlineCanvas, makeFlagCanvas, makeFillCanvas, tileOrigin, insideHex, edgeDist, Pix, hex2rgb,
+    makeTerrainCanvas, makeCityCanvas, makeBorderCanvas, makeRoadCanvas, makeFogCanvas, makeOutlineCanvas, makeFlagCanvas, makeFillCanvas, tileOrigin, insideHex, edgeDist, Pix, hex2rgb,
   };
 })(this);

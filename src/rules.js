@@ -40,8 +40,13 @@
   const ECON = {
     startGold: 3, startFood: 3,      // lo que tienes al empezar
     perLevel: { oro: 1, comida: 1 }, // lo que da cada ciudad por cada nivel, cada turno
-    perBuilding: 1,                  // lo que suma cada edificio (de su tipo: oro o comida)
     maxLevel: 7,
+    levelCost: (level) => 3 * level,    // oro para pasar del nivel "level" al siguiente
+    levelNeeds: (level) => level,       // edificios que hacen falta en su territorio para subir
+    expandCost: 8, expandLevel: 3,      // ampliar el territorio (un anillo más de casillas)
+    fortCost: 5, fortDefense: 2,        // fortificación: defensa extra a la tropa que defiende la ciudad
+    roadCost: 2,                        // camino en una casilla
+    roadBonus: 1,                       // oro extra por cada ciudad unida a la capital (y lo mismo para la capital)
     unitsPerCity: (level) => level + 1, // tropas que puede mantener cada ciudad
     heal: 3, healInCity: 5, healCost: 1,
     cityVision: 2,
@@ -52,14 +57,17 @@
   // Tropas que se pueden reclutar ahora (las demás llegarán con las tecnologías).
   const RECRUITABLE = ['colono', 'miliciano', 'arquero', 'jinete'];
   // Edificios: dónde se construyen, cuánto oro cuestan y qué producen.
+  // Baratos y sencillos (granja, cantera), caros y potentes (caza, mina), y dos con algo especial.
   const BUILDINGS = {
-    granja:   { label: 'Plantación de trigo', resource: 'trigo',   cost: 3, gives: 'comida' },
-    caza:     { label: 'Puesto de caza',      resource: 'caza',    cost: 2, gives: 'comida' },
-    puerto:   { label: 'Puerto pesquero',     resource: 'pesca',   cost: 3, gives: 'comida' },
-    aserradero: { label: 'Aserradero',        resource: 'lena',    cost: 3, gives: 'oro' },
-    mina:     { label: 'Mina',                resource: 'mineral', cost: 5, gives: 'oro' },
-    cantera:  { label: 'Cantera',             terrain: 'montana', noResource: true, cost: 4, gives: 'oro' },
+    granja:     { label: 'Plantación de trigo', resource: 'trigo',   cost: 2, gives: { comida: 1 } },
+    cantera:    { label: 'Cantera',             terrain: 'montana', noResource: true, cost: 2, gives: { oro: 1 } },
+    caza:       { label: 'Puesto de caza',      resource: 'caza',    cost: 5, gives: { comida: 2 } },
+    mina:       { label: 'Mina',                resource: 'mineral', cost: 6, gives: { oro: 2 } },
+    aserradero: { label: 'Aserradero',          resource: 'lena',    cost: 3, gives: { oro: 1 }, forestBonus: 1,
+                  extra: '+1 más si en el territorio queda otro bosque sin edificio' },
+    puerto:     { label: 'Puerto pesquero',     resource: 'pesca',   cost: 4, gives: { comida: 1, oro: 1 } },
   };
+  const givesText = (g) => Object.entries(g).map(([k, v]) => `+${v} ${k}`).join(' y ');
   function buildingFor(t) {
     return Object.keys(BUILDINGS).find(k => {
       const b = BUILDINGS[k];
@@ -85,7 +93,7 @@
     const map = opts.map, players = opts.players || [0, 1], army = ARMIES[opts.army] || ARMIES.real;
     const anchors = opts.close ? closeAnchors(map, players.length) : map.starts.slice(0, players.length);
     const game = { players: players.map(f => ({ faction: f, alive: true, techs: [], gold: ECON.startGold, food: ECON.startFood, founded: 0 })),
-      turn: 0, round: 1, units: [], cities: [], territory: {}, buildings: {}, nextId: 1, winner: null, events: [] };
+      turn: 0, round: 1, units: [], cities: [], territory: {}, buildings: {}, roads: {}, nextId: 1, winner: null, events: [] };
     const taken = new Set();
     anchors.forEach((a, p) => {
       const city = addCity(game, map, p, a.col, a.row, true);
@@ -169,7 +177,8 @@
   function addCity(game, map, owner, col, row, capital) {
     const p = game.players[owner];
     p.founded = (p.founded || 0) + 1;
-    const city = { id: game.nextId++, owner, col, row, capital: !!capital, origin: owner, number: p.founded };
+    const city = { id: game.nextId++, owner, col, row, capital: !!capital, origin: owner, number: p.founded,
+      level: 1, expanded: false, fort: false };
     game.cities.push(city);
     game.territory[key(col, row)] = city.id;
     for (const [c, r] of M.neighbors(col, row, map.cols, map.rows)) {
@@ -184,11 +193,123 @@
   function cityBuildings(game, map, city) {
     return cityTiles(game, map, city).map(t => game.buildings[key(t.col, t.row)]).filter(Boolean);
   }
-  // El nivel sube 1 por cada edificio de su territorio (máximo 7).
-  function cityLevel(game, map, city) { return Math.min(ECON.maxLevel, 1 + cityBuildings(game, map, city).length); }
+  function cityLevel(game, map, city) { return city.level || 1; }
+  // Lo que da un edificio en su casilla (el aserradero da más si queda otro bosque libre en el territorio).
+  function buildingGives(game, map, t) {
+    const type = game.buildings[key(t.col, t.row)], b = BUILDINGS[type], out = Object.assign({}, b.gives);
+    if (b.forestBonus) {
+      const city = ownerOfTile(game, t.col, t.row);
+      const free = city && cityTiles(game, map, city).some(x => x.terrain === 'bosque' && x !== t && !game.buildings[key(x.col, x.row)] && !cityAt(game, x.col, x.row));
+      if (free) out.oro = (out.oro || 0) + b.forestBonus;
+    }
+    return out;
+  }
   function cityIncome(game, map, city) {
-    const lvl = cityLevel(game, map, city), out = { oro: ECON.perLevel.oro * lvl, comida: ECON.perLevel.comida * lvl };
-    for (const b of cityBuildings(game, map, city)) out[BUILDINGS[b].gives] += ECON.perBuilding;
+    const lvl = cityLevel(game, map, city), out = { oro: ECON.perLevel.oro * lvl, comida: ECON.perLevel.comida * lvl, camino: 0 };
+    for (const t of cityTiles(game, map, city)) {
+      if (!game.buildings[key(t.col, t.row)]) continue;
+      const g = buildingGives(game, map, t);
+      out.oro += g.oro || 0; out.comida += g.comida || 0;
+    }
+    // Caminos: cada ciudad unida a la capital da +1, y la capital +1 por cada una.
+    const linked = connectedCities(game, map, city.owner);
+    if (city.capital) out.camino = linked.length * ECON.roadBonus;
+    else if (linked.includes(city)) out.camino = ECON.roadBonus;
+    out.oro += out.camino;
+    return out;
+  }
+
+  // --- Subir de nivel y mejoras de ciudad -----------------------------------
+  function levelUpProblem(game, map, city) {
+    const lvl = cityLevel(game, map, city);
+    if (city.owner !== game.turn) return 'No es tu ciudad.';
+    if (lvl >= ECON.maxLevel) return 'Ya está en el nivel máximo.';
+    const need = ECON.levelNeeds(lvl), have = cityBuildings(game, map, city).length;
+    if (have < need) return `Para subir al nivel ${lvl + 1} necesita ${need} edificio${need > 1 ? 's' : ''} en su territorio (tiene ${have}).`;
+    if (game.players[game.turn].gold < ECON.levelCost(lvl)) return `Te falta oro para subir de nivel (cuesta ${ECON.levelCost(lvl)}).`;
+    return null;
+  }
+  function levelUp(game, map, city) {
+    if (levelUpProblem(game, map, city)) return false;
+    game.players[game.turn].gold -= ECON.levelCost(cityLevel(game, map, city));
+    city.level = cityLevel(game, map, city) + 1;
+    return true;
+  }
+  function expandProblem(game, map, city) {
+    if (city.owner !== game.turn) return 'No es tu ciudad.';
+    if (city.expanded) return 'Ya está ampliada.';
+    if (cityLevel(game, map, city) < ECON.expandLevel) return `Para ampliar el territorio la ciudad tiene que ser nivel ${ECON.expandLevel}.`;
+    if (!expandTiles(game, map, city).length) return 'No quedan casillas libres alrededor.';
+    if (game.players[game.turn].gold < ECON.expandCost) return `Te falta oro para ampliar (cuesta ${ECON.expandCost}).`;
+    return null;
+  }
+  function expandTiles(game, map, city) {
+    return map.tiles.filter(t => M.distance(t.col, t.row, city.col, city.row) === 2 && !game.territory[key(t.col, t.row)]);
+  }
+  function expand(game, map, city) {
+    if (expandProblem(game, map, city)) return 0;
+    game.players[game.turn].gold -= ECON.expandCost;
+    const tiles = expandTiles(game, map, city);
+    tiles.forEach(t => { game.territory[key(t.col, t.row)] = city.id; });
+    city.expanded = true;
+    return tiles.length;
+  }
+  function fortProblem(game, map, city) {
+    if (city.owner !== game.turn) return 'No es tu ciudad.';
+    if (city.fort) return 'Ya está fortificada.';
+    if (game.players[game.turn].gold < ECON.fortCost) return `Te falta oro para fortificar (cuesta ${ECON.fortCost}).`;
+    return null;
+  }
+  function fortify(game, map, city) {
+    if (fortProblem(game, map, city)) return false;
+    game.players[game.turn].gold -= ECON.fortCost;
+    city.fort = true;
+    return true;
+  }
+
+  // --- Caminos ----------------------------------------------------------------
+  // Las ciudades cuentan como camino. Los caminos sirven a todos, también al enemigo.
+  function hasRoad(game, col, row) { return !!game.roads[key(col, row)] || !!cityAt(game, col, row); }
+  function roadProblem(game, map, t) {
+    if (!t) return 'Aquí no.';
+    if (t.terrain === 'mar' || t.terrain === 'costa') return 'No se puede hacer un camino en el mar.';
+    if (hasRoad(game, t.col, t.row)) return 'Ya hay camino.';
+    const owner = ownerOfTile(game, t.col, t.row);
+    if (owner && owner.owner !== game.turn) return 'Es territorio enemigo.';
+    const u = unitAt(game, t.col, t.row);
+    if (u && u.owner !== game.turn) return 'Hay una tropa enemiga encima.';
+    if (!owner && !(u && u.owner === game.turn)) return 'Fuera de tu territorio necesitas una tropa tuya en la casilla.';
+    if (game.players[game.turn].gold < ECON.roadCost) return `Te falta oro (un camino cuesta ${ECON.roadCost}).`;
+    return null;
+  }
+  function canOfferRoad(game, map, t) { // si tiene sentido enseñar el botón
+    if (!t || t.terrain === 'mar' || t.terrain === 'costa' || hasRoad(game, t.col, t.row)) return false;
+    const owner = ownerOfTile(game, t.col, t.row), u = unitAt(game, t.col, t.row);
+    return owner ? owner.owner === game.turn : !!(u && u.owner === game.turn);
+  }
+  function buildRoad(game, map, t) {
+    if (roadProblem(game, map, t)) return false;
+    game.players[game.turn].gold -= ECON.roadCost;
+    game.roads[key(t.col, t.row)] = true;
+    return true;
+  }
+  // Ciudades del jugador unidas a su capital por caminos (sin contar la capital).
+  function connectedCities(game, map, owner) {
+    const cap = game.cities.find(c => c.owner === owner && c.capital);
+    if (!cap) return [];
+    const seen = new Set([key(cap.col, cap.row)]), queue = [cap], out = [];
+    for (let qi = 0; qi < queue.length; qi++) {
+      const cur = queue[qi];
+      for (const [c, r] of M.neighbors(cur.col, cur.row, map.cols, map.rows)) {
+        const k = key(c, r);
+        if (seen.has(k) || !hasRoad(game, c, r)) continue;
+        seen.add(k);
+        const city = cityAt(game, c, r);
+        if (city && city.owner !== owner) continue; // una ciudad enemiga corta el camino
+        if (city) out.push(city);
+        queue.push({ col: c, row: r });
+      }
+    }
     return out;
   }
   function playerIncome(game, map, owner) {
@@ -299,8 +420,10 @@
         if (!t || !ground(t).walk) continue;
         const other = unitAt(game, c, r);
         if (other && other.owner !== unit.owner) continue;
-        const stops = ground(t).stop || enemyNear(game, unit.owner, c, r);
-        const left = stops ? 0 : cur.left - 1;
+        // Por camino (de camino a camino) cuesta medio movimiento, y el camino no para la tropa.
+        const road = hasRoad(game, c, r), onRoad = road && hasRoad(game, cur.col, cur.row);
+        const stops = (ground(t).stop && !road) || enemyNear(game, unit.owner, c, r);
+        const left = stops ? 0 : cur.left - (onRoad ? 0.5 : 1);
         const k = key(c, r);
         if (best.has(k) && best.get(k) >= left) continue;
         best.set(k, left);
@@ -326,7 +449,11 @@
     }
     return bonus;
   }
-  function defenseOf(map, u, game) { return Math.max(0, UNITS[u.type].def + terrainDef(map, u, undefined, undefined, game)); }
+  function fortBonus(game, u) {
+    const c = game && cityAt(game, u.col, u.row);
+    return c && c.fort && c.owner === u.owner ? ECON.fortDefense : 0;
+  }
+  function defenseOf(map, u, game) { return Math.max(0, UNITS[u.type].def + terrainDef(map, u, undefined, undefined, game) + fortBonus(game, u)); }
   function weak(u) { return u.hp * 2 < UNITS[u.type].hp; } // menos de la mitad de vida
   // Daño = 3 x ataque - defensa (con el terreno). Herido: 1 menos. Siempre al menos 1.
   function damage(game, map, att, def, attHp) {
@@ -416,7 +543,9 @@
   const api = { UNITS, SKILLS, CLASSES, TECH_TERRAIN, ARMIES, GROUND, ECON, BUILDINGS, RECRUITABLE, has, visionOf, newGame, unitAt, reachable, targets, preview, move, attack,
     endTurn, defenseOf, terrainDef, weak, canDoSomething, key,
     cityAt, cityById, ownerOfTile, cityTiles, cityLevel, cityIncome, playerIncome, cityUnits, cityCapacity,
-    foundProblem, found, buildOption, build, buildingFor, recruitProblem, recruit, healProblem, healAmount, heal };
+    foundProblem, found, buildOption, build, buildingFor, recruitProblem, recruit, healProblem, healAmount, heal,
+    givesText, buildingGives, levelUpProblem, levelUp, expandProblem, expand, expandTiles, fortProblem, fortify, fortBonus,
+    hasRoad, roadProblem, canOfferRoad, buildRoad, connectedCities };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PERules = api;
 })(this);
