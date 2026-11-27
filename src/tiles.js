@@ -187,22 +187,52 @@
       p.set(xx, oy + y - h, C.wheatHi); p.set(xx + 1, oy + y - h + 1, C.wheat); p.set(xx - 1, oy + y - h + 1, C.wheatD);
     }
   }
-  function stoneBlocks(p, cx, cy, r, n) {
-    for (let i = 0; i < n; i++) {
-      const x = cx + Math.floor((r() - 0.5) * 18), y = cy + Math.floor((r() - 0.5) * 8);
-      const w = 5 + Math.floor(r() * 3), h = 4;
-      p.rect(x, y, w, h, '#9a978e'); p.rect(x, y, w, 1, '#d2cfc5'); p.rect(x + w - 1, y, 1, h, '#6a675e');
-      p.rect(x, y + h, w, 1, '#4c4a43');
-    }
+  // Un bloque de piedra cortada visto en perspectiva (cara de arriba clara, frente y lado).
+  function block(p, x, y, w, h) {
+    p.rect(x, y, w, 2, '#e4e0d4');            // arriba
+    p.rect(x, y + 2, w, h, '#bdb8aa');        // frente
+    p.rect(x + w, y + 1, 2, h + 1, '#8f8a7d'); // lado
+    p.rect(x, y + 2 + h, w + 2, 1, '#4c4a43'); // sombra
+    p.set(x + 1, y + 4, '#d4d0c4');
   }
-  function quarryPit(p, oy) {
-    // terrazas de piedra cortada en el suelo
-    for (let k = 0; k < 4; k++) {
-      const x0 = 12 + k * 2, x1 = 44 - k * 2, y = oy + 18 + k * 4;
-      p.rect(x0, y, x1 - x0, 4, k % 2 ? '#8e8b81' : '#a4a196');
-      p.rect(x0, y, x1 - x0, 1, '#c8c5bb');
-      for (let x = x0 + 3; x < x1; x += 6) p.set(x, y + 2, '#6a675e');
+  // Cantera: una roca grande natural a la que le han cortado un trozo en bloques rectos
+  // (se ve la piedra clara recién cortada), con una grúa de madera y bloques apilados.
+  function quarry(p, oy, onMountain) {
+    const base = oy + 32, h = onMountain ? 1.7 : 1;
+    // roca natural: varias masas redondeadas
+    const lumps = [[18, base - 8 * h, 13, 11 * h], [32, base - 13 * h, 14, 15 * h], [43, base - 7 * h, 9, 9 * h]];
+    for (const [cx, cy, rx, ry] of lumps) {
+      p.ellipse(cx, cy, rx, ry, null, (u, v) => {
+        if (v > 0.55) return null; // la base queda plana
+        const l = -u * 0.6 - v;
+        return l > 0.7 ? '#c2beb3' : l > 0.1 ? '#a19d92' : l > -0.5 ? '#86827a' : '#6b685f';
+      });
     }
+    // corte: piedra clara recién cortada en escalones con juntas de bloques
+    const x0 = 19, x1 = 38, top = Math.round(base - 18 * h);
+    for (let y = top; y <= base + 2; y++) {
+      const row = Math.floor((y - top) / 5), inset = Math.max(0, 3 - row);
+      for (let x = x0 + inset; x <= x1 - inset; x++) {
+        let c = '#e3dac3';
+        if ((y - top) % 5 === 0) c = '#f4eedd';                 // borde de escalón
+        else if ((y - top) % 5 === 4) c = '#a89f88';            // sombra del escalón
+        else if ((x + row * 4) % 8 === 0) c = '#b9b09a';        // junta entre bloques
+        if (x <= x0 + inset + 1) c = '#8f8775';                 // pared interior en sombra
+        p.set(x, y, c);
+      }
+    }
+    // grúa de madera con un bloque colgando
+    const gy = top - 10;
+    p.rect(45, gy, 2, base + 6 - gy, C.woodD); p.rect(45, gy, 1, base + 6 - gy, C.wood);
+    p.rect(30, gy, 18, 2, C.wood); p.rect(30, gy, 18, 1, C.woodHi);
+    p.line(46, gy + 8, 41, gy + 1, C.woodD);
+    p.rect(32, gy + 2, 1, 6, '#e8e0c8');
+    block(p, 29, gy + 8, 6, 3);
+    // bloques cortados apilados delante y un pico
+    block(p, 6, base + 2, 6, 4); block(p, 13, base + 2, 6, 4); block(p, 9, base - 4, 6, 4);
+    block(p, 40, base + 6, 6, 4);
+    p.line(23, base + 12, 27, base + 5, '#7a5a3a');
+    p.line(24, base + 4, 30, base + 6, '#c8ccd2'); p.set(24, base + 3, '#c8ccd2');
   }
   function mineEntrance(p, cx, base) {
     p.rect(cx - 5, base - 9, 10, 9, C.woodD);
@@ -327,7 +357,7 @@
       if (resource === 'trigo') {
         wheatField(p, oy, r);
       } else if (resource === 'cantera') {
-        quarryPit(p, oy); stoneBlocks(p, 28, oy + 10, r, 2);
+        quarry(p, oy, false);
       } else {
         grassTufts(p, oy, r, 14); flowers(p, oy, r, 6);
         if (r() < 0.5) roundTree(p, 12 + Math.floor(r() * 30), oy + 22 + Math.floor(r() * 12), 0.8);
@@ -354,21 +384,13 @@
     if (terrain === 'montana') {
       side(p, C.stoneSide);
       face(p, oy, C.rockGround, r, '#7d875a');
+      if (resource === 'cantera') { quarry(p, oy, true); return p.done(); }
       const cx = 30 + Math.floor(r() * 4) - 2, base = oy + 34, top = oy - 30 + Math.floor(r() * 6);
       mountain(p, cx - 15, oy + 26, oy - 8, 11, false); // montañita de atrás
-      mountain(p, cx, base, top, 20, resource !== 'cantera');
+      mountain(p, cx, base, top, 20, true);
       if (resource === 'mineral') {
         goldVeins(p, cx, base, top, 20, r);
         mineEntrance(p, cx - 6, base + 4);
-      } else if (resource === 'cantera') {
-        // la falda cortada en bloques
-        for (let k = 0; k < 3; k++) {
-          const y = base - 14 + k * 5, hw = 6 + k * 4;
-          p.rect(cx - hw, y, hw * 2, 5, k % 2 ? '#a4a196' : '#bab7ad');
-          p.rect(cx - hw, y, hw * 2, 1, '#dcd9cf');
-          p.rect(cx + hw - 2, y, 2, 5, '#77746b');
-        }
-        stoneBlocks(p, cx - 2, base + 4, r, 2);
       } else {
         grassTufts(p, oy, r, 4, '#6f7a48');
       }

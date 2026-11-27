@@ -7,14 +7,15 @@
   // --- Opciones (se ajustan aquí) ----------------------------------------
   const SIZES = {
     // radius = casillas del centro al borde; el mapa es un hexágono de lado radius+1.
-    pequeno: { radius: 8, players: 2, label: 'Pequeño' },   // 217 casillas
-    mediano: { radius: 10, players: 4, label: 'Mediano' },  // 331 casillas
-    grande:  { radius: 12, players: 6, label: 'Grande' },   // 469 casillas
+    // Unas 140-165 casillas por jugador.
+    pequeno: { radius: 10, players: 2, label: 'Pequeño' },  // 21 de ancho, 331 casillas
+    mediano: { radius: 13, players: 4, label: 'Mediano' },  // 27 de ancho, 547 casillas
+    grande:  { radius: 16, players: 6, label: 'Grande' },   // 33 de ancho, 817 casillas
   };
   // land = parte del mapa que es tierra; freq = lo "troceada" que sale la tierra.
   const MAP_TYPES = {
-    continente: { land: 0.66, freq: 1.6, edge: 0.9, label: 'Continente' },
-    costas:     { land: 0.50, freq: 2.2, edge: 0.7, label: 'Costas' },
+    continente: { land: 0.56, freq: 1.8, edge: 1.3, label: 'Continente' },
+    costas:     { land: 0.46, freq: 2.4, edge: 0.9, label: 'Costas' },
     islas:      { land: 0.38, freq: 3.0, edge: 0.3, islands: true, label: 'Islas' },
   };
   // Probabilidad de que una casilla útil tenga recurso ("normal" = unos 2 por ciudad).
@@ -164,9 +165,36 @@
     const land = tiles.filter(t => t.elev >= seaLevel);
     land.forEach(t => (t.terrain = 'llanura'));
 
-    // Montañas: lo más alto y rocoso (~15% de la tierra).
-    const byRock = land.slice().sort((a, b) => (b.elev + b.rock * 0.8) - (a.elev + a.rock * 0.8));
-    byRock.slice(0, Math.round(land.length * 0.15)).forEach(t => (t.terrain = 'montana'));
+    // Montañas: varias sierras cortas repartidas por el mapa (~15% de la tierra),
+    // con huecos entre ellas para que no corten todo el paso.
+    const wantMountains = Math.round(land.length * 0.15);
+    const step = (t, d) => { // d: 0=E 1=NE 2=NO 3=O 4=SO 5=SE
+      const odd = t.row & 1;
+      const D = odd ? [[1, 0], [1, -1], [0, -1], [-1, 0], [0, 1], [1, 1]]
+                    : [[1, 0], [0, -1], [-1, -1], [-1, 0], [-1, 1], [0, 1]];
+      return at(t.col + D[d][0], t.row + D[d][1]);
+    };
+    const near = (t, dist) => tiles.some(o => o.terrain === 'montana' && distance(o.col, o.row, t.col, t.row) <= dist);
+    let mountains = 0;
+    const byHeight = land.slice().sort((a, b) => (b.elev + b.rock) - (a.elev + a.rock));
+    for (let tries = 0; mountains < wantMountains && tries < 400; tries++) {
+      // empieza en una zona alta, pero lejos de otras sierras
+      const pool = byHeight.slice(0, Math.max(8, Math.round(byHeight.length * 0.6)));
+      let cur = pool[Math.floor(rng() * pool.length)];
+      if (cur.terrain === 'montana' || near(cur, 2)) continue;
+      let dir = Math.floor(rng() * 6);
+      const length = 3 + Math.floor(rng() * 4); // 3 a 6 montañas
+      for (let k = 0; k < length && cur && mountains < wantMountains; k++) {
+        if (cur.terrain === 'llanura') { cur.terrain = 'montana'; mountains++; }
+        if (rng() < 0.15) { // a veces un pico al lado
+          const side = step(cur, (dir + 2) % 6);
+          if (side && side.terrain === 'llanura' && mountains < wantMountains) { side.terrain = 'montana'; mountains++; }
+        }
+        dir = (dir + (rng() < 0.3 ? (rng() < 0.5 ? 1 : 5) : 0)) % 6;
+        const next = step(cur, dir);
+        cur = next && next.terrain === 'llanura' ? next : null;
+      }
+    }
     // Bosques: lo más húmedo (~30% de la tierra).
     const flat = land.filter(t => t.terrain === 'llanura').sort((a, b) => b.moist - a.moist);
     flat.slice(0, Math.round(land.length * 0.30)).forEach(t => (t.terrain = 'bosque'));
