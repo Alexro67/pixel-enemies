@@ -63,7 +63,7 @@
   const TECHS = {
     caza:          { branch: 'campo',  level: 1, label: 'Caza y caminos',
                      text: 'Caminos y puentes: 2 oro cada casilla, en tu territorio o en terreno neutral que veas. Ir de camino a camino gasta medio movimiento y el bosque, la montaña o el río no paran a la tropa. Cada ciudad unida por camino a tu capital da +1 oro, y la capital +1 por cada una. Ampliar territorio: 8 oro, la ciudad gana el anillo de casillas libres que la rodea' },
-    molinos:       { branch: 'campo',  level: 2, label: 'Molinos',        text: 'Cada plantación de trigo da 2 de comida en vez de 1' },
+    molinos:       { branch: 'campo',  level: 2, label: 'Molinos',        text: 'Puedes hacer varios molinos en la misma ciudad. Cada plantación cuenta para todos los molinos que tenga al lado' },
     gremios:       { branch: 'campo',  level: 3, label: 'Gremios',        text: 'Para subir una ciudad de nivel hace falta 1 edificio menos en su territorio' },
     comercio:      { branch: 'comercio', level: 3, label: 'Comercio', after: ['caza'],
                      text: 'En el mercado puedes cambiar 2 comida por 1 oro o 2 oro por 1 comida, 3 veces por turno. El mercader abre una ruta de comercio al llegar a otra ciudad (tuya o de otro) unida por camino a la suya: cada turno, 1 oro para cada ciudad, o 2 si están a más de 4 casillas. Una tropa o muralla de un tercero en el camino la corta. Pide antes Caza y caminos porque las rutas van por camino' },
@@ -185,6 +185,8 @@
                   extra: '+1 oro por cada mina, cantera o aserradero de al lado. Cañones y catapultas, y edificios 1 oro más baratos en esta ciudad' },
     templo:     { label: 'Templo',  big: true, nearNeeded: 1, cost: 6, gives: {}, tech: 'monasterios', near: ['granja', 'caza', 'puerto'], per: 'comida',
                   extra: '+1 comida por cada plantación, puesto de caza o puerto de al lado. Tus tropas en su territorio se curan 2 solas y recluta monjes' },
+    molino:     { label: 'Molino', big: true, many: true, cost: 4, gives: {}, tech: 'molinos', near: ['granja'], nearNeeded: 1, per: 'comida',
+                  extra: '+1 comida por cada plantación de trigo de al lado' },
     santuario:  { label: 'Santuario de las leyendas', big: true, cost: 15, gives: {}, tech: 'mitos', nearNeeded: 0, minLevel: 4,
                   extra: 'aquí se reclutan la lamia, el gigante y el dragón' },
   };
@@ -339,7 +341,6 @@
     const type = game.buildings[key(t.col, t.row)], b = BUILDINGS[type], out = Object.assign({}, b.gives);
     const owner = ownerOfTile(game, t.col, t.row);
     if (b.big) { if (b.per) out[b.per] = owner ? bigNeighbors(game, map, t, owner.owner, b.near) : 0; return out; }
-    if (type === 'granja' && owner && hasTech(game, owner.owner, 'molinos')) out.comida = (out.comida || 0) + 1;
     if (b.forestBonus) {
       const city = ownerOfTile(game, t.col, t.row);
       const free = city && cityTiles(game, map, city).some(x => x.terrain === 'bosque' && x !== t && !game.buildings[key(x.col, x.row)] && !cityAt(game, x.col, x.row));
@@ -542,7 +543,7 @@
       const b = BUILDINGS[type], cost = buildCost(game, map, city, type), near = bigNeighbors(game, map, t, game.turn, b.near);
       let problem = null;
       if (b.tech && !hasTech(game, game.turn, b.tech)) problem = `Necesitas la tecnología ${TECHS[b.tech].label} (rama ${branchLabel(b.tech)}).`;
-      else if (cityHas(game, map, city, type)) problem = `Esta ciudad ya tiene ${b.label.toLowerCase()}.`;
+      else if (!b.many && cityHas(game, map, city, type)) problem = `Esta ciudad ya tiene ${b.label.toLowerCase()}.`;
       else if (b.minLevel && cityLevel(game, map, city) < b.minLevel) problem = `Solo en ciudades de nivel ${b.minLevel} o más (esta es de nivel ${cityLevel(game, map, city)}).`;
       else if (near < (b.nearNeeded === undefined ? 2 : b.nearNeeded)) problem = `Necesita al lado al menos ${b.nearNeeded === undefined ? 2 : b.nearNeeded} edificio${b.nearNeeded === 1 ? '' : 's'}${b.near ? ' de estos: ' + b.near.map(k => BUILDINGS[k].label.toLowerCase()).join(', ') : ''} (tiene ${near}).`;
       else if (other && other.owner !== game.turn) problem = 'Hay una tropa enemiga encima.';
@@ -1187,7 +1188,7 @@
     for (const k of Object.keys(BUILDINGS)) {
       const b = BUILDINGS[k];
       if (b.tech !== id) continue;
-      let where = b.big ? 'en una llanura vacía de tu territorio, uno por ciudad' : b.resource ? `donde haya ${(M.RESOURCE[b.resource] || { label: b.resource }).label.toLowerCase()}` : b.terrains ? 'en cualquier casilla de costa o río de tu territorio' : '';
+      let where = b.big ? `en una llanura vacía de tu territorio${b.many ? '' : ', uno por ciudad'}` : b.resource ? `donde haya ${(M.RESOURCE[b.resource] || { label: b.resource }).label.toLowerCase()}` : b.terrains ? 'en cualquier casilla de costa o río de tu territorio' : '';
       if (b.big) {
         const n = b.nearNeeded === undefined ? 2 : b.nearNeeded;
         if (n) where += `, con al menos ${n} edificio${n > 1 ? 's' : ''} al lado` + (b.near ? ` (${b.near.map(x => BUILDINGS[x].label.toLowerCase()).join(', ')})` : '');

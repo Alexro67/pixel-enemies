@@ -449,6 +449,20 @@
     p.rect(x + w / 2 - 1, y - 26, 2, 3, '#f5cf3a'); // llama dorada
   }
 
+  // Molino: torre de piedra con tejado cónico y aspas de madera.
+  function windmill(p, oy) {
+    const cx = 28, y = oy + 36;
+    shadowSoft(p, cx + 2, y + 1, 10, 3);
+    for (let j = 0; j < 18; j++) { const half = 5 + Math.floor(j / 6); p.rect(cx - half, y - 18 + j, half * 2, 1, j % 4 === 0 ? '#c8bca4' : '#e2d8c2'); p.rect(cx + half - 2, y - 18 + j, 2, 1, '#b0a48c'); }
+    p.rect(cx - 2, y - 6, 4, 6, '#5a3c24');                                     // puerta
+    for (let j = 0; j < 7; j++) p.rect(cx - j - 1, y - 25 + j, j * 2 + 2, 1, j > 4 ? '#8a3020' : '#b8503a'); // tejado
+    // aspas en cruz
+    const hx = cx, hy = y - 19;
+    p.line(hx - 11, hy - 11, hx + 11, hy + 11, '#6a4424'); p.line(hx - 11, hy + 11, hx + 11, hy - 11, '#6a4424');
+    for (let k = 3; k < 11; k++) { p.set(hx - k + 1, hy - k, '#f4ecd8'); p.set(hx + k - 1, hy + k, '#f4ecd8'); p.set(hx - k, hy + k - 1, '#f4ecd8'); p.set(hx + k, hy - k + 1, '#f4ecd8'); }
+    p.rect(hx - 1, hy - 1, 2, 2, '#3a2414');
+  }
+
   // Santuario de las leyendas: círculo de piedras antiguas con un arco y una llama mágica morada.
   function sanctuary(p, oy) {
     const cx = 28, y = oy + 34;
@@ -698,6 +712,7 @@
       else if (building === 'taller') workshop(p, oy);
       else if (building === 'templo') temple(p, oy);
       else if (building === 'santuario') sanctuary(p, oy);
+      else if (building === 'molino') windmill(p, oy);
       else if (building) {
         plowedField(p, oy);
       } else if (resource === 'trigo') {
