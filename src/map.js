@@ -302,6 +302,7 @@
       seed, size: opts.size, type: opts.type, abundance: opts.abundance, gen: opts.gen || 1, radius: R, cols, rows,
       tiles: out, index,
       starts: starts.map(t => ({ col: t.col, row: t.row })),
+      spots: startable.map(t => ({ col: t.col, row: t.row })), // otros sitios buenos para empezar (terreno favorito)
     };
   }
   function tileAt(map, col, row) {

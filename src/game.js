@@ -2,9 +2,11 @@
 (function () {
   'use strict';
   const T = window.PETiles, M = window.PEMap, R = window.PERules, U = window.PEUnits;
-  const FACTION_COLORS = ['#d23b3b', '#e8c021', '#3b6fd2', '#3fa34d', '#8e4bc4', '#ee8a2a'];
-  const FACTION_NAMES = ['Hondarribia', 'Irun', 'Donosti', 'Lekumberri', 'Alli', 'Leitza'];
-  const PLAYERS = [0, 1];       // de momento: Hondarribia contra Irun, en el mismo móvil
+  const FACTION_COLORS = R.FACTIONS.map(f => f.color);
+  const FACTION_NAMES = R.FACTIONS.map(f => f.name);
+  // Facciones de la partida en un solo móvil (se eligen al empezar una nueva).
+  let PLAYERS = (localGet('pe.players', '0,1').split(',').map(Number).filter(n => n >= 0 && n < 6));
+  if (PLAYERS.length < 2) PLAYERS = [0, 1];
   const RELIEF = true;          // casillas con un poco de relieve, como una maqueta
   const DPR = Math.min(3, window.devicePixelRatio || 1); // más resolución en pantallas nítidas
   const SAVE_KEY = 'pe.partida3'; // (v2: con ciudades; las partidas guardadas de antes no sirven)
@@ -25,6 +27,7 @@
   function localSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* sin guardado */ } }
   const factionOf = (owner) => state.game.players[owner].faction;
   const nameOf = (owner) => FACTION_NAMES[factionOf(owner)];
+  const sc0 = () => window.PEGame || {};
   const unitName = (u) => `${R.UNITS[u.type].label} de ${nameOf(u.owner)}`;
   // La capital se llama como la facción; las demás llevan un número (Irun 2, Irun 3...).
   const cityName = (c) => FACTION_NAMES[state.game.players[c.origin].faction] + (c.number > 1 ? ' ' + c.number : '');
@@ -69,8 +72,8 @@
           for (let v = 0; v < T.VARIANTS; v++)
             this.addTex(`t_${terrain}_${res || 'nada'}_${v}`, T.makeTerrainCanvas(terrain, res, v));
       FACTION_COLORS.forEach((c, i) => {
-        this.addTex(`flag_${i}`, T.makeFlagCanvas(c));
-        U.TYPES.forEach(type => this.addTex(`u_${type}_${i}`, U.makeUnitCanvas(type, c)));
+        this.addTex(`flag_${i}`, T.makeFlagCanvas(c, R.FACTIONS[i].emblem));
+        U.TYPES.forEach(type => this.addTex(`u_${type}_${i}`, U.makeUnitCanvas(type, c, i)));
       });
       this.addTex('fog', T.makeFogCanvas());
       this.addTex('select', T.makeOutlineCanvas('#fff6c8'));
@@ -105,7 +108,7 @@
       state.orders = saved.orders || [];
       document.body.classList.toggle('online', online);
       if (online) state.fog = true; // en online la niebla va siempre puesta
-      const players = saved.players || PLAYERS;
+      const players = saved.players || (saved.game ? saved.game.players.map(p => p.faction) : PLAYERS);
       if (saved.game || online) {
         state.size = saved.size; state.type = saved.type; state.abundance = saved.abundance; state.armies = ({ cerca: 'prueba', lejos: 'real' })[saved.armies] || saved.armies;
       }
@@ -252,7 +255,7 @@
         if (t.hidden) continue;
         const o = T.tileOrigin(c.col, c.row), lvl = R.cityLevel(game, map, c), f = factionOf(c.owner);
         const ckey = `city_${f}_${citySize(lvl)}_${c.capital ? 1 : 0}_${c.fort ? 1 : 0}`;
-        if (!this.textures.exists(ckey)) this.addTex(ckey, T.makeCityCanvas(FACTION_COLORS[f], citySize(lvl), c.capital, c.fort));
+        if (!this.textures.exists(ckey)) this.addTex(ckey, T.makeCityCanvas(FACTION_COLORS[f], citySize(lvl), c.capital, c.fort, R.FACTIONS[f].emblem));
         const img = this.add.image(o.x, o.y, ckey).setOrigin(0, 0).setDepth(c.row + 0.6);
         const label = this.add.text(o.x + T.W / 2, o.y + T.TOP + T.H + 2, `${cityName(c)} · Nv ${lvl} · ⚔${R.cityUnits(game, c).length}/${R.cityCapacity(game, map, c)}`,
           { fontFamily: 'monospace', fontStyle: 'bold', fontSize: '9px', color: f === 1 ? '#2b1d3a' : '#ffffff',
@@ -404,7 +407,13 @@
       if (!path) { this.busy = false; return; }
       const v = this.unitViews.get(u.id);
       if (!u.aboard && !v.visible && !this.isHidden(path[0].col, path[0].row)) v.setVisible(true); // baja del barco
-      for (const step of path) {
+      if (dest.cave) { // guardián de las cuevas: se mete en la roca y sale en la otra montaña
+        const p = this.unitPos(dest.col, dest.row);
+        await this.tween({ targets: v, alpha: 0, y: v.y + 8, duration: 220 });
+        v.x = p.x; v.y = p.y + 8; v.setDepth(dest.row + 0.8); this.layer.sort('depth');
+        await this.tween({ targets: v, alpha: 1, y: p.y, duration: 260 });
+      }
+      for (const step of (dest.cave ? [] : path)) {
         const p = this.unitPos(step.col, step.row);
         if (p.x !== v.x) v.img.setFlipX(p.x < v.x);
         const fromRow = Math.round(v.depth - 0.8);
@@ -461,6 +470,7 @@
       else if (result.back) msg += ` Contraataque: le devuelve ${result.back}` + (result.dies ? ' y lo elimina.' : '.');
       if (burnViews.length) msg += ` Su fuego quema a ${burnViews.length} tropa${burnViews.length > 1 ? 's' : ''} más` + (result.burned ? ` y elimina a ${result.burned}.` : '.');
       if (result.charms && def.hp > 0) msg += ` ¡Lo encanta: no podrá moverse en su próximo turno!`;
+      if (result.stole) msg += ` ¡Le roba ${result.stole} de oro a ${nameOf(def.owner)}!`;
       if (canLeave) msg += ' Aún puede moverse.';
       if (again) msg += ' ¡Implacable: puede volver a atacar!';
       ui.say(msg);
@@ -886,7 +896,7 @@
     if (state.me !== null || (window.PEGame && window.PEGame.replaying)) return; // las online se guardan en el servidor
     const m = state.map;
     localSet(SAVE_KEY, JSON.stringify({ seed: m.seed, size: state.size, type: state.type, abundance: state.abundance, gen: state.gen,
-      armies: state.armies, game: state.game }));
+      armies: state.armies, players: state.game.players.map(p => p.faction), game: state.game }));
   }
   function loadGame() {
     try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s && s.game && s.game.roads && s.seed ? s : null; } catch (e) { return null; }
@@ -897,7 +907,7 @@
   const ui = {
     topHeight() { return $('topbar').offsetHeight; },
     bottomHeight() { return $('bottombar').offsetHeight; },
-    overlayOpen() { return !$('ov-box').parentNode.hidden || !$('tech').hidden; },
+    overlayOpen() { return !$('ov-box').parentNode.hidden || !$('tech').hidden || !$('setup').hidden; },
     onMap(map) {
       $('code').textContent = map.seed;
       $('size').value = state.size;
@@ -949,7 +959,7 @@
       const t = M.tileAt(map, u.col, u.row);
       let txt = `${unitName(u)} · Vida ${u.hp}/${s.hp} · Ataque ${s.atk} · Defensa ${R.defenseOf(map, u, g)}`;
       const why = db.why === 'terreno' ? M.TERRAIN[t.terrain].label.toLowerCase() : db.why === 'muralla' ? 'la muralla' : 'la fortificación';
-      const bits = [db.best > 0 ? `+${db.best} por ${why}` : '', db.minus ? `${db.minus} por el río` : ''].filter(Boolean);
+      const bits = [db.best > 0 ? `+${db.best} por ${why}` : '', db.bulwark ? `+${db.bulwark} por baluarte` : '', db.minus ? `${db.minus} por el río` : ''].filter(Boolean);
       if (bits.length) txt += ` (${bits.join(', ')})`;
       const home = u.home && R.cityById(g, u.home);
       txt += home ? ` · Es de ${cityName(home)}` : ' · No ocupa plaza en ninguna ciudad';
@@ -958,6 +968,7 @@
       txt += ` · ${R.CLASSES[s.cls].label}` + s.skills.map(k => ` · ${R.SKILLS[k].label}: ${R.SKILLS[k].text}`).join('');
       if (R.weak(u)) txt += ' · Herido: pega 1 menos';
       if (u.charmed) txt += ' · Encantada por una lamia: este turno no puede moverse';
+      if (R.has(u, 'cuevas') && u.owner === g.turn && sc0().moves && [...sc0().moves.values()].some(m => m.cave)) txt += ' · Desde esta montaña puede saltar a las otras montañas de tu territorio';
       if (s.sea) txt += ` · Navega por ${s.sea.map(k => M.TERRAIN[k].label.toLowerCase()).join(' y ')}` + (s.carry ? ` · Lleva ${s.carry} tropa${s.carry > 1 ? 's' : ''}` : ' · No lleva tropas');
       const ship = R.shipOf(g, u), crew = R.isShip(u) ? R.passengers(g, u) : [];
       if (ship) txt = `A bordo de ${R.UNITS[ship.type].label.toLowerCase()}` + (u.owner === g.turn ? (u.moved ? ': podrá bajar a tierra en tu próximo turno' : ': toca una casilla azul de tierra para bajar') : '') + ` · ${txt}`;
@@ -1097,7 +1108,10 @@
       txt += ` · Edificios ${R.cityTiles(g, map, c).filter(t => g.buildings[R.key(t.col, t.row)]).length}`;
       if (c.fort) txt += ` · Fortificada (+${R.ECON.fortDefense} defensa)`;
       const occupier = R.unitAt(g, c.col, c.row);
-      if (occupier && occupier.owner !== c.owner) txt += ` · ¡Ocupada por ${unitName(occupier)}! Si sigue aquí al empezar su turno, la conquista.`;
+      const rock = R.perk(g, c.owner, 'roca');
+      if (occupier && occupier.owner !== c.owner) txt += ` · ¡Ocupada por ${unitName(occupier)}! ` + (rock
+        ? (c.siege && c.siegeBy === occupier.owner ? 'Ya aguantó un turno dentro: si sigue al empezar su turno, la conquista.' : 'Ciudad de roca: tiene que seguir dentro al empezar 2 turnos suyos seguidos para conquistarla.')
+        : 'Si sigue aquí al empezar su turno, la conquista.');
       if (c.owner === g.turn) {
         const sc = window.PEGame, E = R.ECON;
         const lvlProblem = R.levelUpProblem(g, map, c);
@@ -1112,7 +1126,7 @@
           txt += ` · Mercado: te quedan ${E.trades - (c.trades || 0)} cambios este turno`;
         }
         // Solo se enseñan las tropas que ya tienes (las demás salen al investigar).
-        const list = R.RECRUITABLE.filter(type => !R.UNITS[type].tech || R.hasTech(g, c.owner, R.UNITS[type].tech)).map(type => {
+        const list = R.RECRUITABLE.filter(type => (!R.UNITS[type].tech || R.hasTech(g, c.owner, R.UNITS[type].tech)) && !R.factionUnit(g, c.owner, type)).map(type => {
           const problem = R.recruitProblem(g, map, c, type);
           return { label: `${R.UNITS[type].label} (${R.unitCost(g, c.owner, type)} comida)`, disabled: !!problem, onClick: () => sc.doRecruit(c, type), problem };
         });
@@ -1151,7 +1165,7 @@
         let d = '';
         if (id) {
           const t = R.TECHS[id], have = R.hasTech(g, who, id), problem = R.techProblem(g, who, id);
-          const x = R.techDetails(id);
+          const x = R.techDetails(id, factionOf(who));
           d = `<b>${esc(t.label)}</b> (rama ${R.branchLabel(id)}, nivel ${t.level}, ${R.techCost(g, who, id)} oro)`;
           d += '<ul class="td">';
           if (x.needs.length) d += `<li><b>Pide:</b> ${esc(x.needs.join(', '))}</li>`;
@@ -1172,7 +1186,7 @@
           if (window.PEGame.busy || !window.PEGame.doTech(id)) return;
           ui.showTechs(id);
           $('tech-detail').insertAdjacentHTML('afterbegin', `<div>¡Investigada ${esc(R.TECHS[id].label)}!</div>`);
-          const x = R.techDetails(id), what = x.units.map(u => u.split(':')[0]).concat(x.buildings.map(b => b.split(':')[0]));
+          const x = R.techDetails(id, factionOf(who)), what = x.units.map(u => u.split(':')[0]).concat(x.buildings.map(b => b.split(':')[0]));
           ui.say(`Has investigado ${R.TECHS[id].label}.` + (what.length ? ` Ya puedes: ${what.join(', ').toLowerCase()}.` : '') + (x.text ? ` ${x.text}.` : ''));
         };
       };
@@ -1189,6 +1203,7 @@
         if (e.kind === 'eliminado') return `${nameOf(e.player)} ha perdido su última ciudad y queda eliminado.`;
         if (e.kind === 'cobro') return `Cobras ${e.oro} de oro y ${e.comida} de comida.`;
         if (e.kind === 'templo') return `Los templos curan a ${e.n} tropa${e.n > 1 ? 's' : ''}.`;
+        if (e.kind === 'asedio') return `${cityName(R.cityById(g, e.city))} es una ciudad de roca de Alli y aguanta: si tu tropa sigue dentro en tu próximo turno, la conquistas.`;
         return '';
       }).filter(Boolean).join(' ');
       // Aviso si hay enemigos dentro de una de tus ciudades.
@@ -1197,9 +1212,10 @@
         return u && u.owner !== g.turn;
       }).map(cityName);
       const warn = danger.length ? ` ¡Cuidado: hay enemigos dentro de ${danger.join(' y ')}! Échalos o la perderás.` : '';
+      const perk = g.factions && g.round === 1 ? ` ${factionText(f)}` : '';
       ui.overlay(`Turno de ${FACTION_NAMES[f]}`,
-        first ? `Nueva partida: ${PLAYERS.map(p => FACTION_NAMES[p]).join(' contra ')}. Cada uno empieza con su capital. Gana quien conquiste todas las ciudades enemigas. Empieza ${FACTION_NAMES[f]}.`
-              : `Ronda ${g.round}. Pasa el móvil a ${FACTION_NAMES[f]}. ${news}${warn}`,
+        (first ? `Nueva partida: ${g.players.map(p => FACTION_NAMES[p.faction]).join(' contra ')}. Cada uno empieza con su capital. Gana quien conquiste todas las ciudades enemigas. Empieza ${FACTION_NAMES[f]}.${perk}`
+              : `Ronda ${g.round}. Pasa el móvil a ${FACTION_NAMES[f]}. ${news}${warn}`) + (first ? '' : perk),
         'Empezar mi turno', FACTION_COLORS[f], () => window.PEGame.focusPlayer());
     },
     showWinner() {
@@ -1229,6 +1245,59 @@
       cancel.onclick = () => { o.hidden = true; if (opts.onCancel) opts.onCancel(); };
       if (!input.hidden) input.focus();
     },
+    // --- Facciones ---------------------------------------------------------
+    // Ficha de una facción: escudo, terreno favorito, ventaja y tropa propia.
+    factionCard(f) {
+      const F = R.FACTIONS[f], u = R.UNITS[F.unit];
+      const esc = (x) => String(x).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]);
+      const flag = window.PEGame && window.PEGame.textures.exists(`flag_${f}`) ? window.PEGame.textures.get(`flag_${f}`).getSourceImage().toDataURL() : '';
+      const pic = window.PEGame && window.PEGame.textures.exists(`u_${F.unit}_${f}`) ? window.PEGame.textures.get(`u_${F.unit}_${f}`).getSourceImage().toDataURL() : '';
+      const skills = u.skills.filter(k => !['barco', 'distancia'].includes(k)).map(k => `${R.SKILLS[k].label.toLowerCase()} (${R.SKILLS[k].text})`);
+      const stats = `vida ${u.hp} · ataque ${u.atk} · defensa ${u.def} · mueve ${u.move}` + (u.range > 1 ? ` · dispara a ${u.range}` : '') + (u.carry ? ` · lleva ${u.carry} tropa` : '') + ` · ${u.cost} comida · pide ${R.TECHS[u.tech].label}`;
+      return `<div class="fcard" style="border-color:${F.color}">
+        <div class="fhead">${flag ? `<img src="${flag}" alt="">` : ''}<b style="color:${F.color}">${esc(F.name)}</b></div>
+        <div><b>Terreno favorito:</b> ${esc(F.favText)}</div>
+        <div><b>Ventaja:</b> ${esc(F.perk)}.</div>
+        <div class="funit">${pic ? `<img src="${pic}" alt="">` : ''}<div><b>Tropa propia: ${esc(u.label)}</b><br>${esc(stats)}${skills.length ? '<br>' + esc(skills.join(', ')) : ''}</div></div>
+      </div>`;
+    },
+    // Partida nueva en un solo móvil: cuántos jugáis y qué facción lleva cada uno.
+    showSetup(onStart) {
+      const box = $('setup'), max = 6;
+      let picks = PLAYERS.slice(0, max);
+      const draw = () => {
+        let h = '<div id="setup-box"><h2>Partida nueva</h2><p>¿Cuántos jugáis en este móvil?</p><div class="row">';
+        for (let n = 2; n <= max; n++) h += `<button data-n="${n}" class="${n === picks.length ? 'main' : ''}">${n}</button>`;
+        h += '</div>';
+        picks.forEach((f, i) => {
+          h += `<label>Jugador ${i + 1}<select data-i="${i}">` + FACTION_NAMES.map((n, k) => `<option value="${k}"${k === f ? ' selected' : ''}${picks.includes(k) && k !== f ? ' disabled' : ''}>${n}</option>`).join('') + '</select></label>';
+        });
+        const big = picks.length >= 5 && !['grande', 'enorme'].includes(state.size), mid = picks.length >= 3 && ['mini', 'pequeno'].includes(state.size);
+        if (big || mid) h += `<p class="small">Para ${picks.length} jugadores va mejor un mapa ${big ? 'Grande' : 'Mediano'} o más (arriba, en el menú del tamaño).</p>`;
+        h += '<div class="row"><button id="setup-cancel">Cancelar</button><button id="setup-go" class="main">Empezar</button></div>';
+        h += '<h3>Las facciones</h3>' + picks.map(f => ui.factionCard(f)).join('');
+        const others = FACTION_NAMES.map((n, k) => k).filter(k => !picks.includes(k));
+        if (others.length) h += '<p class="small">Las demás:</p>' + others.map(f => ui.factionCard(f)).join('');
+        h += '</div>';
+        box.innerHTML = h;
+        box.querySelectorAll('button[data-n]').forEach(b => { b.onclick = () => {
+          const n = Number(b.dataset.n);
+          while (picks.length < n) picks.push([0, 1, 2, 3, 4, 5].find(k => !picks.includes(k)));
+          picks = picks.slice(0, n); draw();
+        }; });
+        box.querySelectorAll('select[data-i]').forEach(sel => { sel.onchange = () => { picks[Number(sel.dataset.i)] = Number(sel.value); draw(); }; });
+        $('setup-cancel').onclick = () => { box.hidden = true; ui.onMap(state.map); };
+        $('setup-go').onclick = () => {
+          box.hidden = true;
+          PLAYERS = picks.slice();
+          localSet('pe.players', PLAYERS.join(','));
+          onStart();
+        };
+      };
+      draw();
+      box.hidden = false;
+      box.scrollTop = 0;
+    },
     // Pregunta antes de tirar una partida a medias (sin las ventanas del navegador).
     confirmNew(onYes, onNo) {
       if (!inProgress()) { onYes(); return; }
@@ -1237,12 +1306,17 @@
     },
   };
 
+  // Ventaja y tropa propia de una facción, en una frase (para las ventanas).
+  function factionText(f) {
+    const F = R.FACTIONS[f], u = R.UNITS[F.unit];
+    return `Ventaja de ${F.name}: ${F.perk}. Su tropa propia es ${u.label.toLowerCase()} (con ${R.TECHS[u.tech].label}).`;
+  }
   function inProgress() {
     const g = state.game;
     return g && g.winner === null && (g.round > 1 || g.turn > 0 || g.units.some(u => u.moved || u.acted));
   }
   function newGame(seed, ask) {
-    const go = () => window.PEGame.startGame({ seed });
+    const go = () => ui.showSetup(() => window.PEGame.startGame({ seed }));
     if (ask) ui.confirmNew(go, () => ui.onMap(state.map)); else go();
   }
   // Cambiar un menú empieza otra partida: si hay una a medias, se pregunta antes.
@@ -1265,6 +1339,13 @@
     $('armies').onchange = onMenu('armies', true);
     $('fog').onclick = () => { state.fog = !state.fog; $('fog').classList.toggle('on', state.fog); window.PEGame.selectUnit(null); window.PEGame.applyFog(); };
     $('end').onclick = () => window.PEGame.endTurn();
+    // Tocar el nombre del turno recuerda la ventaja de cada facción de la partida.
+    $('turn').onclick = () => {
+      const g = state.game;
+      if (!g || ui.overlayOpen() || (window.PEGame && window.PEGame.busy)) return;
+      const text = g.factions ? g.players.map(p => factionText(p.faction)).join(' ') : 'Esta partida es de antes de las facciones: nadie tiene ventajas ni tropas propias. Empieza una nueva para tenerlas.';
+      ui.overlay('Las facciones', text, 'Cerrar', '#4a3563', null, true);
+    };
     $('techs').onclick = () => { if (state.game && !(window.PEGame && window.PEGame.replaying)) ui.showTechs(); };
     $('code').onclick = () => {
       ui.overlay('Código de mapa', 'Escribe el código de un mapa para jugar en él. Empieza una partida nueva.', 'Jugar en ese mapa', '#4a3563',
@@ -1279,7 +1360,7 @@
   }
 
   window.PEUI = ui;
-  window.PEFactions = { names: FACTION_NAMES, colors: FACTION_COLORS };
+  window.PEFactions = { names: FACTION_NAMES, colors: FACTION_COLORS, card: (f) => ui.factionCard(f) };
   window.addEventListener('load', () => {
     wireUi();
     new Phaser.Game({

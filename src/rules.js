@@ -113,6 +113,54 @@
     gigante:   { label: 'Gigante',   hp: 30, atk: 4, def: 3, move: 1, range: 1, cost: 22, cls: 'coloso', skills: ['legendaria', 'derriba', 'explorador'], tech: 'leyendas', needs: 'santuario' },
     dragon:    { label: 'Dragón',    hp: 20, atk: 5, def: 2, move: 3, range: 1, cost: 30, cls: 'volador', skills: ['legendaria', 'vuela', 'fuego'], tech: 'leyendas', needs: 'santuario' },
   };
+  // Tropas propias de cada facción: solo las recluta esa facción (y solo en las partidas nuevas, con facciones).
+  Object.assign(UNITS, {
+    arcabucero:    { label: 'Arcabucero', hp: 10, atk: 3, def: 2, move: 1, range: 2, cost: 7, cls: 'tirador', skills: ['distancia', 'baluarte'], tech: 'polvora', faction: 0 },
+    contrabandista: { label: 'Contrabandista', hp: 8, atk: 2, def: 1, move: 2, range: 1, cost: 6, cls: 'infanteria', skills: ['vado', 'roba'], tech: 'caza', faction: 1 },
+    galeote:       { label: 'Galeote', hp: 16, atk: 3, def: 3, move: 3, range: 1, cost: 10, cls: 'naval', skills: ['barco', 'transporte'], tech: 'astilleros', sea: ['costa', 'mar'], carry: 1, faction: 2 },
+    cazador:       { label: 'Cazador de dragones', hp: 10, atk: 2, def: 1, move: 1, range: 2, cost: 6, cls: 'tirador', skills: ['distancia', 'matadragones'], tech: 'arqueria', faction: 3 },
+    guardian:      { label: 'Guardián de las cuevas', hp: 14, atk: 2, def: 4, move: 1, range: 1, cost: 7, cls: 'infanteria', skills: ['cuevas'], tech: 'mineria', faction: 4 },
+    aizkolari:     { label: 'Aizkolari', hp: 12, atk: 5, def: 1, move: 1, range: 1, cost: 8, cls: 'infanteria', skills: [], tech: 'lenadores', faction: 5 },
+  });
+  Object.assign(SKILLS, {
+    baluarte:     { label: 'Baluarte', text: '+2 de defensa dentro de una ciudad tuya o sobre tu muralla (se suma a lo demás)' },
+    vado:         { label: 'Vadea ríos', text: 'el río no le para' },
+    roba:         { label: 'Roba oro', text: 'cuando ataca, le quita 2 de oro al dueño de la tropa atacada' },
+    matadragones: { label: 'Matadragones', text: 'hace el doble de daño a las criaturas legendarias' },
+    cuevas:       { label: 'Cuevas', text: 'si está en una montaña de tu territorio, puede saltar a otra montaña libre de tu territorio' },
+  });
+
+  // --- Facciones -----------------------------------------------------------
+  // Cada una tiene un terreno favorito (sale cerca más a menudo), una ventaja y una tropa propia.
+  // Las ventajas solo valen en partidas nuevas (game.factions = true); las de antes siguen igual.
+  const FACTIONS = [
+    { name: 'Hondarribia', color: '#d23b3b', emblem: 'castillo', fav: 'costa', unit: 'arcabucero', favText: 'costa',
+      perk: 'Capital amurallada: su capital empieza fortificada (+2 de defensa a quien la defiende)' },
+    { name: 'Irun', color: '#e8c021', emblem: 'puente', fav: 'rio', unit: 'contrabandista', favText: 'llanura junto a un río',
+      perk: 'Comerciantes: cada ruta de comercio da 1 oro más a sus ciudades' },
+    { name: 'Donosti', color: '#3b6fd2', emblem: 'concha', fav: 'bahia', unit: 'galeote', favText: 'bahía y mar',
+      perk: 'Marineros: sus barcos cuestan 2 de comida menos' },
+    { name: 'Lekumberri', color: '#3fa34d', emblem: 'pino', fav: 'sierra', unit: 'cazador', favText: 'montaña y bosque',
+      perk: 'Montañeses: el bosque y la montaña no paran a sus tropas' },
+    { name: 'Alli', color: '#8e4bc4', emblem: 'cueva', fav: 'montana', unit: 'guardian', favText: 'valle entre montañas',
+      perk: 'Ciudades de roca: para conquistarle una ciudad hay que aguantar dentro 2 turnos seguidos' },
+    { name: 'Leitza', color: '#ee8a2a', emblem: 'hacha', fav: 'bosque', unit: 'aizkolari', favText: 'bosque espeso',
+      perk: 'Leñadores y canteros: aserradero, mina y cantera le cuestan 1 de oro menos' },
+  ];
+  const PERK = { muralla: 0, rutas: 1, barcos: 2, monte: 3, roca: 4, obras: 5 };
+  const PERK_NUMBERS = { routeExtra: 1, shipDiscount: 2, buildDiscount: 1, siegeTurns: 2, bulwark: 2 };
+  // ¿Tiene este jugador la ventaja de su facción? (solo en partidas con facciones)
+  function perk(game, owner, id) {
+    const p = game && game.factions && game.players[owner];
+    return !!p && p.faction === PERK[id];
+  }
+  function factionUnit(game, owner, type) { // null si la puede reclutar, o el motivo
+    const f = UNITS[type].faction;
+    if (f === undefined) return null;
+    if (!game.factions) return 'Las tropas propias de cada facción solo salen en partidas nuevas.';
+    return game.players[owner].faction === f ? null : `Solo la recluta ${FACTIONS[f].name}.`;
+  }
+
   const ARMIES = { real: ['colono', 'miliciano'], prueba: ['miliciano', 'arquero', 'jinete'] };
   const has = (u, skill) => UNITS[u.type].skills.includes(skill);
   const isShip = (u) => !!UNITS[u.type].sea;
@@ -124,9 +172,12 @@
     return ground(t).walk;
   }
   // ¿Se para al entrar en esta casilla? (bosque, montaña y río paran; al dragón no; a la lamia, el agua no)
-  function stopsAt(u, t) {
+  // Lekumberri: el bosque y la montaña no paran a sus tropas. El contrabandista vadea los ríos.
+  function stopsAt(u, t, game) {
     if (UNITS[u.type].skills.includes('vuela')) return false;
     if (UNITS[u.type].skills.includes('anfibia') && (t.terrain === 'costa' || t.terrain === 'rio')) return false;
+    if (UNITS[u.type].skills.includes('vado') && t.terrain === 'rio') return false;
+    if ((t.terrain === 'bosque' || t.terrain === 'montana') && perk(game, u.owner, 'monte')) return false;
     return !!ground(t).stop;
   }
   const sails = (u, t) => !!t && UNITS[u.type].sea.includes(t.terrain);
@@ -217,15 +268,17 @@
   // Cada jugador empieza con su capital y su ejército encima o al lado.
   function newGame(opts) {
     const map = opts.map, players = opts.players || [0, 1], army = ARMIES[opts.army] || ARMIES.real;
-    const anchors = opts.close ? closeAnchors(map, players.length) : map.starts.slice(0, players.length);
+    const close = opts.close && players.length === 2; // con más de 2, cada uno en su sitio
+    const anchors = close ? closeAnchors(map, players.length) : favoriteStarts(map, players);
     // En el modo de prueba se empieza con mucho oro y comida, para probarlo todo rápido.
     const rich = army === ARMIES.prueba ? 30 : 0;
     const game = { players: players.map(f => ({ faction: f, alive: true, techs: [], gold: ECON.startGold + rich, food: ECON.startFood + rich, founded: 0 })),
-      turn: 0, round: 1, units: [], cities: [], territory: {}, buildings: {}, roads: {}, nextId: 1, winner: null, events: [] };
+      turn: 0, round: 1, units: [], cities: [], territory: {}, buildings: {}, roads: {}, nextId: 1, winner: null, events: [], factions: true };
     ensure(game);
     const taken = new Set();
     anchors.forEach((a, p) => {
       const city = addCity(game, map, p, a.col, a.row, true);
+      if (perk(game, p, 'muralla')) city.fort = true; // Hondarribia: capital amurallada
       const spots = [M.tileAt(map, a.col, a.row)].concat(landAround(map, a, army.length + 1, new Set([key(a.col, a.row)])));
       army.forEach((type, k) => {
         const s = spots.find(x => x && !taken.has(key(x.col, x.row)));
@@ -265,6 +318,50 @@
       next.sort((x, y) => (ground(x).stop ? 1 : 0) - (ground(y).stop ? 1 : 0));
       next.forEach(x => { seen.add(key(x.col, x.row)); queue.push(x); });
     }
+    return out;
+  }
+
+  // Terreno favorito: cuánto le gusta a una facción la zona de alrededor de una casilla (2 casillas).
+  function favoriteScore(map, faction, col, row) {
+    const fav = FACTIONS[faction] ? FACTIONS[faction].fav : null;
+    let n = 0;
+    for (const t of map.tiles) {
+      const d = M.distance(t.col, t.row, col, row);
+      if (d < 1 || d > 2) continue;
+      const w = d === 1 ? 2 : 1; // lo de al lado cuenta el doble
+      if (fav === 'costa' && t.terrain === 'costa') n += w;
+      else if (fav === 'bahia' && (t.terrain === 'costa' || t.terrain === 'mar')) n += w;
+      else if (fav === 'rio' && t.terrain === 'rio') n += 2 * w;
+      else if (fav === 'rio' && t.terrain === 'llanura') n += 0.3 * w;
+      else if (fav === 'sierra' && (t.terrain === 'montana' || t.terrain === 'bosque')) n += w;
+      else if (fav === 'montana' && t.terrain === 'montana') n += 1.5 * w;
+      else if (fav === 'bosque' && t.terrain === 'bosque') n += w;
+    }
+    return Math.min(n, 12); // tampoco hace falta que esté todo lleno
+  }
+  // Cada jugador elige primero el punto de salida que más le gusta, y luego se acerca hasta 2
+  // casillas a un sitio mejor (sin quedar a menos de 6 casillas de nadie).
+  function favoriteStarts(map, players) {
+    const starts = map.starts.slice(0, players.length);
+    if (starts.length < players.length) return starts;
+    const left = starts.slice(), out = new Array(players.length);
+    const order = players.map((f, i) => i).sort((a, b) => a - b);
+    for (const i of order) {
+      left.sort((a, b) => favoriteScore(map, players[i], b.col, b.row) - favoriteScore(map, players[i], a.col, a.row));
+      out[i] = left.shift();
+    }
+    const spots = map.spots || [];
+    const minGap = Math.min(6, ...out.map((a, i) => Math.min(...out.filter((b, j) => j !== i).map(b => M.distance(a.col, a.row, b.col, b.row)))));
+    out.forEach((a, i) => {
+      let best = a, bestS = favoriteScore(map, players[i], a.col, a.row);
+      for (const s of spots) {
+        if (M.distance(s.col, s.row, a.col, a.row) > 2) continue;
+        if (out.some((b, j) => j !== i && M.distance(s.col, s.row, b.col, b.row) < minGap)) continue;
+        const sc = favoriteScore(map, players[i], s.col, s.row);
+        if (sc > bestS + 0.5) { best = s; bestS = sc; }
+      }
+      out[i] = { col: best.col, row: best.row };
+    });
     return out;
   }
 
@@ -360,7 +457,8 @@
   function cityHas(game, map, city, type) { return cityBuildings(game, map, city).includes(type); }
   // Precio de un edificio en una ciudad (el taller los abarata 1 oro, menos a sí mismo).
   function buildCost(game, map, city, type) {
-    const base = BUILDINGS[type].cost;
+    let base = BUILDINGS[type].cost;
+    if (city && ['aserradero', 'mina', 'cantera'].includes(type) && perk(game, city.owner, 'obras')) base = Math.max(1, base - PERK_NUMBERS.buildDiscount);
     return city && type !== 'taller' && cityHas(game, map, city, 'taller') ? Math.max(1, base - 1) : base;
   }
   function cityIncome(game, map, city) {
@@ -376,7 +474,11 @@
     else if (linked.includes(city)) out.camino = ECON.roadBonus;
     out.oro += out.camino;
     out.ruta = 0;
-    for (const rt of game.routes || []) if (rt.a === city.id || rt.b === city.id) out.ruta += routeGold(game, map, rt);
+    for (const rt of game.routes || []) {
+      if (rt.a !== city.id && rt.b !== city.id) continue;
+      const g = routeGold(game, map, rt);
+      out.ruta += g + (g && perk(game, city.owner, 'rutas') ? PERK_NUMBERS.routeExtra : 0); // Irun: 1 más por ruta
+    }
     out.oro += out.ruta;
     return out;
   }
@@ -829,11 +931,14 @@
       const more = game.cities.filter(c => c.owner === owner && !c.capital).length + game.units.filter(u => u.owner === owner && u.type === 'colono').length;
       cost += ECON.settlerStep * more;
     }
+    if (UNITS[type].sea && perk(game, owner, 'barcos')) cost = Math.max(1, cost - PERK_NUMBERS.shipDiscount);
     return cost;
   }
   // ¿Puede esta ciudad reclutar esta tropa? null si sí, o el motivo.
   function recruitProblem(game, map, city, type) {
     if (city.owner !== game.turn) return 'No es tu ciudad.';
+    const own = factionUnit(game, city.owner, type);
+    if (own) return own;
     const need = UNITS[type].tech;
     if (need && !hasTech(game, city.owner, need)) return `Necesitas la tecnología ${TECHS[need].label}.`;
     const place = UNITS[type].needs;
@@ -932,7 +1037,7 @@
         if (st && st.owner !== unit.owner && !fly) continue; // por las murallas y torres del enemigo no se pasa (el dragón vuela por encima)
         // Por camino (de camino a camino) cuesta medio movimiento, y el camino no para la tropa.
         const road = hasRoad(game, c, r), onRoad = road && hasRoad(game, cur.col, cur.row);
-        const stops = (stopsAt(unit, t) && !road) || enemyNear(game, unit.owner, c, r);
+        const stops = (stopsAt(unit, t, game) && !road) || enemyNear(game, unit.owner, c, r);
         const left = stops ? 0 : cur.left - (onRoad ? 0.5 : 1);
         const k = key(c, r);
         if (best.has(k) && best.get(k) >= left) continue;
@@ -942,7 +1047,20 @@
         queue.push({ col: c, row: r, left, path });
       }
     }
+    // Guardián de las cuevas: desde una montaña de tu territorio salta a cualquier otra montaña libre de tu territorio.
+    if (has(unit, 'cuevas') && !unit.acted && mountainOfOwner(game, map, unit.col, unit.row, unit.owner)) {
+      for (const t of map.tiles) {
+        const k = key(t.col, t.row);
+        if (out.has(k) || (t.col === unit.col && t.row === unit.row) || !mountainOfOwner(game, map, t.col, t.row, unit.owner)) continue;
+        if (unitAt(game, t.col, t.row) || structAt(game, t.col, t.row)) continue;
+        out.set(k, { col: t.col, row: t.row, path: [{ col: t.col, row: t.row }], cave: true });
+      }
+    }
     return out;
+  }
+  function mountainOfOwner(game, map, col, row, owner) {
+    const t = M.tileAt(map, col, row), city = t && t.terrain === 'montana' && ownerOfTile(game, col, row);
+    return !!city && city.owner === owner;
   }
 
   // Barcos: van por su tipo de agua, el terreno no los para; junto a un enemigo se paran.
@@ -997,7 +1115,10 @@
     ];
     const best = parts.reduce((a, b) => (b.n > a.n ? b : a), { why: null, n: 0 });
     const minus = parts.filter(x => x.n < 0).reduce((a, x) => a + x.n, 0);
-    return { n: best.n + minus, why: best.why, best: best.n, minus };
+    // Baluarte (arcabucero): dentro de una ciudad tuya o sobre tu muralla, +2 que sí se suma.
+    const c = game && cityAt(game, u.col, u.row);
+    const bulwark = has(u, 'baluarte') && ((c && c.owner === u.owner) || wallBonus(game, u)) ? PERK_NUMBERS.bulwark : 0;
+    return { n: best.n + minus + bulwark, why: best.why, best: best.n, minus, bulwark };
   }
   function defenseOf(map, u, game) { return Math.max(0, UNITS[u.type].def + defenseBonus(map, u, game).n); }
   function weak(u) { return u.hp * 2 < UNITS[u.type].hp; } // menos de la mitad de vida
@@ -1006,7 +1127,8 @@
     const hp = attHp === undefined ? att.hp : attHp;
     const hurt = hp * 2 < UNITS[att.type].hp ? 1 : 0;
     const anti = has(def, 'antiMontada') && UNITS[att.type].cls === 'montada' ? 2 : 0;
-    return Math.max(1, 3 * UNITS[att.type].atk - defenseOf(map, def, game) - anti - hurt);
+    const n = Math.max(1, 3 * UNITS[att.type].atk - defenseOf(map, def, game) - anti - hurt);
+    return has(att, 'matadragones') && has(def, 'legendaria') ? 2 * n : n; // el cazador de dragones, doble a las legendarias
   }
   function inRange(att, def) { return M.distance(att.col, att.row, def.col, def.row) <= UNITS[att.type].range; }
 
@@ -1022,7 +1144,8 @@
     if (defLeft > 0 && inRange(def, att) && !has(def, 'sinReplica') && !has(def, 'civil')) back = damage(game, map, def, att, defLeft);
     return { dealt: Math.min(dealt, def.hp), back: Math.min(back, att.hp), kills: defLeft <= 0, dies: back >= att.hp,
       burns: fireTargets(game, att, def).map(x => ({ id: x.id, dealt: Math.min(x.hp, fireDamage(game, map, att, x)) })),
-      charms: has(att, 'encanta') && defLeft > 0 };
+      charms: has(att, 'encanta') && defLeft > 0,
+      steals: has(att, 'roba') && game.players[def.owner] ? Math.max(0, Math.min(2, game.players[def.owner].gold)) : 0 };
   }
   // Fuego del dragón: los enemigos de las casillas que tocan a la vez al dragón y al objetivo.
   function fireTargets(game, att, def) {
@@ -1050,6 +1173,12 @@
     r.burned = 0;
     for (const b of r.burns) { const x = unitById(game, b.id); x.hp -= b.dealt; if (x.hp <= 0) { r.burned++; att.kills++; } }
     if (r.charms) def.charmed = true;
+    // Contrabandista: le roba oro al dueño de la tropa atacada.
+    if (has(att, 'roba')) {
+      const victim = game.players[def.owner], mine = game.players[att.owner];
+      r.stole = Math.max(0, Math.min(2, victim.gold));
+      victim.gold -= r.stole; mine.gold += r.stole;
+    }
     att.acted = true;
     if (!has(att, 'hostigador')) att.moved = true;
     if (r.kills) att.kills++;
@@ -1093,7 +1222,14 @@
     game.cities.forEach(c => { if (c.owner === next) c.trades = 0; });
     for (const c of game.cities) {
       const u = unitAt(game, c.col, c.row);
+      if (c.siegeBy === next && (!u || u.owner !== next)) { delete c.siege; delete c.siegeBy; } // el asedio se levanta
       if (!u || u.owner !== next || c.owner === next) continue;
+      // Alli: sus ciudades aguantan; hay que seguir dentro al empezar 2 turnos seguidos.
+      if (perk(game, c.owner, 'roca')) {
+        c.siege = (c.siegeBy === next ? c.siege || 0 : 0) + 1; c.siegeBy = next;
+        if (c.siege < PERK_NUMBERS.siegeTurns) { game.events.push({ kind: 'asedio', city: c.id, from: c.owner, to: next }); continue; }
+      }
+      delete c.siege; delete c.siegeBy;
       const from = c.owner;
       c.owner = next; c.capital = false;
       game.units.forEach(x => { if (x.home === c.id) x.home = null; }); // las tropas que salieron de allí ya no cuentan
@@ -1168,7 +1304,8 @@
     return null;
   }
   // Explicación completa de una tecnología: lo que pide, las tropas y edificios que da (con sus cifras) y lo demás.
-  function techDetails(id) {
+  // faction: si se da, solo salen las tropas propias de esa facción (las de otras no).
+  function techDetails(id, faction) {
     const t = TECHS[id], out = { needs: [], units: [], buildings: [], text: t.text };
     const list = techsOfBranch(t.branch), prev = list[list.indexOf(id) - 1];
     if (prev) out.needs.push(`${TECHS[prev].label} (la anterior de la rama)`);
@@ -1177,7 +1314,8 @@
     for (const k of Object.keys(UNITS)) {
       const u = UNITS[k];
       if (u.tech !== id) continue;
-      let d = `${u.label}: ${u.cost} comida · vida ${u.hp} · ataque ${u.atk} · defensa ${u.def} · mueve ${u.move}` + (u.range > 1 ? ` · alcance ${u.range}` : '');
+      if (u.faction !== undefined && faction !== undefined && u.faction !== faction) continue;
+      let d = `${u.label}${u.faction !== undefined ? ` (solo ${FACTIONS[u.faction].name})` : ''}: ${u.cost} comida · vida ${u.hp} · ataque ${u.atk} · defensa ${u.def} · mueve ${u.move}` + (u.range > 1 ? ` · alcance ${u.range}` : '');
       if (u.carry) d += ` · lleva ${u.carry} tropas`;
       if (u.sea) d += ` · navega por ${u.sea.map(x => (M.TERRAIN[x] || { label: x }).label.toLowerCase()).join(' y ')}`;
       if (u.needs) d += ` · se recluta en ciudades con ${BUILDINGS[u.needs].label.toLowerCase()}`;
@@ -1247,7 +1385,7 @@
     ensure(game);
     for (const k of Object.keys(game.cleared || {})) { const [c, r] = k.split(',').map(Number); const t = M.tileAt(map, c, r); if (t) t.resource = null; }
   }
-  const api = { techDetails, TECHS, BRANCHES, hasTech, techCost, techProblem, research, techsOfBranch, branchLabel,
+  const api = { FACTIONS, PERK_NUMBERS, perk, factionUnit, favoriteScore, techDetails, TECHS, BRANCHES, hasTech, techCost, techProblem, research, techsOfBranch, branchLabel,
     blessTargets, blessProblem, bless, levelNeedsFor, applyCleared, perform, unitById, UNITS, SKILLS, CLASSES, TECH_TERRAIN, ARMIES, GROUND, ECON, BUILDINGS, RECRUITABLE, has, visionOf, newGame, unitAt, reachable, targets, preview, move, attack,
     endTurn, defenseOf, terrainDef, weak, canDoSomething, key,
     cityAt, cityById, ownerOfTile, cityTiles, cityLevel, cityIncome, playerIncome, cityUnits, cityCapacity,
