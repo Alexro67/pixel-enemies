@@ -45,25 +45,25 @@
     { id: 'saber',  label: 'Saber' },
   ];
   const TECHS = {
-    caza:          { branch: 'campo',  level: 1, label: 'Caza y caminos', text: 'Puesto de caza, caminos y puentes' },
-    molinos:       { branch: 'campo',  level: 2, label: 'Molinos',        text: '+1 comida en cada plantación de trigo' },
-    gremios:       { branch: 'campo',  level: 3, label: 'Gremios',        text: 'Subir una ciudad de nivel pide 1 edificio menos' },
-    comercio:      { branch: 'campo',  level: 4, label: 'Comercio',       text: 'Mercado, mercader y rutas de comercio' },
-    lenadores:     { branch: 'monte',  level: 1, label: 'Leñadores',      text: 'Aserradero, y la infantería gana +1 de defensa en el bosque' },
-    mineria:       { branch: 'monte',  level: 2, label: 'Minería',        text: 'Mina' },
-    forja:         { branch: 'monte',  level: 3, label: 'Forja',          text: 'Espadachín, caballero y taller' },
+    caza:          { branch: 'campo',  level: 1, label: 'Caza y caminos', text: 'Puedes construir el puesto de caza (5 oro, +2 comida) en bosques con animales, y caminos y puentes (2 oro). Por camino las tropas gastan medio movimiento y una ciudad unida a la capital da +1 oro' },
+    molinos:       { branch: 'campo',  level: 2, label: 'Molinos',        text: 'Cada plantación de trigo da +1 comida más (2 en vez de 1)' },
+    gremios:       { branch: 'campo',  level: 3, label: 'Gremios',        text: 'Subir una ciudad de nivel pide 1 edificio menos en su territorio' },
+    comercio:      { branch: 'campo',  level: 4, label: 'Comercio',       text: 'Puedes construir el mercado (8 oro, +1 oro por cada edificio de al lado, cambia comida por oro) y reclutar al mercader (3 comida), que abre rutas de comercio entre dos ciudades unidas por camino: 1 oro por turno a cada una, o 2 si están a más de 4 casillas' },
+    lenadores:     { branch: 'monte',  level: 1, label: 'Leñadores',      text: 'Puedes construir el aserradero (3 oro, +1 oro, +1 más si queda otro bosque libre) en bosques con leña. Tu infantería gana +1 de defensa en el bosque' },
+    mineria:       { branch: 'monte',  level: 2, label: 'Minería',        text: 'Puedes construir la mina (6 oro, +2 oro) en montañas con mineral' },
+    forja:         { branch: 'monte',  level: 3, label: 'Forja',          text: 'Puedes reclutar espadachín (5 comida, fuerte en todo) y caballero (8 comida, mueve 2 y si mata vuelve a atacar), y construir el taller (8 oro, +1 oro por mina, cantera o aserradero de al lado; abarata 1 oro los edificios de su ciudad y permite cañones y catapultas)' },
     montaneros:    { branch: 'monte',  level: 4, label: 'Montañeros',     text: 'Todas tus tropas ganan +1 de defensa en la montaña' },
-    fortificacion: { branch: 'guerra', level: 1, label: 'Fortificación',  text: 'Fortificar ciudades, murallas, torres y lancero' },
-    polvora:       { branch: 'guerra', level: 2, label: 'Pólvora',        text: 'Cañón' },
-    ingenieria:    { branch: 'guerra', level: 3, label: 'Ingeniería',     text: 'Catapulta' },
-    pesca:         { branch: 'mar',    level: 1, label: 'Pesca',          text: 'Puerto pesquero (la barca llega más adelante)' },
-    astilleros:    { branch: 'mar',    level: 2, label: 'Astilleros',     text: 'Carabela', later: true },
-    rutas:         { branch: 'mar',    level: 3, label: 'Rutas marítimas', text: 'Rutas de comercio por mar', later: true },
-    armada:        { branch: 'mar',    level: 4, label: 'Armada',         text: 'Galeón de guerra', later: true },
-    escritura:     { branch: 'saber',  level: 1, label: 'Escritura',      text: 'Las tecnologías te cuestan 1 oro menos' },
-    monasterios:   { branch: 'saber',  level: 2, label: 'Monasterios',    text: 'Templo y monje (el monje cura a las tropas de su lado)' },
-    mitos:         { branch: 'saber',  level: 3, label: 'Mitos',          text: 'Lamia', later: true },
-    leyendas:      { branch: 'saber',  level: 4, label: 'Leyendas',       text: 'Gigante y dragón', later: true },
+    fortificacion: { branch: 'guerra', level: 1, label: 'Fortificación',  text: 'Puedes fortificar ciudades (5 oro, +2 de defensa al que la defiende), construir murallas (4 oro, 30 de vida, el enemigo no pasa) y torres de vigía (7 oro, 20 de vida, ven a 3 casillas), y reclutar al lancero (4 comida, +2 de defensa contra jinetes)' },
+    polvora:       { branch: 'guerra', level: 2, label: 'Pólvora',        text: 'Puedes reclutar el cañón (6 comida, dispara a 2 casillas, si se mueve no ataca ese turno). Solo en ciudades con taller' },
+    ingenieria:    { branch: 'guerra', level: 3, label: 'Ingeniería',     text: 'Puedes reclutar la catapulta (8 comida, dispara a 3 casillas, nadie le devuelve el golpe, si se mueve no ataca ese turno). Solo en ciudades con taller' },
+    pesca:         { branch: 'mar',    level: 1, label: 'Pesca',          text: 'Puedes construir el puerto pesquero (4 oro, +1 comida y +1 oro) en agua con peces. (La barca llega más adelante)' },
+    astilleros:    { branch: 'mar',    level: 2, label: 'Astilleros',     text: 'Carabela, un barco rápido que explora', later: true },
+    rutas:         { branch: 'mar',    level: 3, label: 'Rutas marítimas', text: 'Rutas de comercio por mar entre puertos', later: true },
+    armada:        { branch: 'mar',    level: 4, label: 'Armada',         text: 'Galeón de guerra, el barco más fuerte', later: true },
+    escritura:     { branch: 'saber',  level: 1, label: 'Escritura',      text: 'Todas las demás tecnologías te cuestan 1 oro menos' },
+    monasterios:   { branch: 'saber',  level: 2, label: 'Monasterios',    text: 'Puedes construir el templo (6 oro, +1 comida por cada plantación, puesto de caza o puerto de al lado; tus tropas heridas en su territorio se curan 2 cada turno) y reclutar al monje (5 comida) en ciudades con templo: en vez de atacar, cura 3 de vida a tus tropas de al lado' },
+    mitos:         { branch: 'saber',  level: 3, label: 'Mitos',          text: 'Lamia, criatura de tierra y agua que encanta e inmoviliza', later: true },
+    leyendas:      { branch: 'saber',  level: 4, label: 'Leyendas',       text: 'Gigante, que derriba murallas, y dragón, que escupe fuego', later: true },
   };
   const TECH_COST = [0, 3, 5, 8, 12]; // por nivel de la tecnología
 
@@ -106,7 +106,7 @@
     trades: 3,                          // cambios por turno en cada mercado (2 de una cosa por 1 de la otra)
     templeHeal: 2,                      // vida que recuperan solas tus tropas en el territorio de un templo
     routeGold: 1, routeFarGold: 2, routeFar: 4, // oro por ruta para cada ciudad (2 si están a más de 4 casillas)
-    wallCost: 3, towerCost: 5, wallHp: 30, towerHp: 20, repairCost: 2,
+    wallCost: 4, towerCost: 7, demolishCost: 1, wallHp: 30, towerHp: 20, repairCost: 2,
     wallDefense: 2,                     // defensa extra a tu tropa que está sobre tu muralla
     towerVision: 3,
   };
@@ -386,13 +386,16 @@
     if (owner && owner.owner !== game.turn) return 'Es territorio enemigo.';
     const u = unitAt(game, t.col, t.row);
     if (u && u.owner !== game.turn) return 'Hay una tropa enemiga encima.';
-    if (structAt(game, t.col, t.row)) return 'Hay una muralla o una torre.';
+    const st = structAt(game, t.col, t.row);
+    if (st && st.kind === 'torre') return 'Hay una torre.';
+    if (st && st.owner !== game.turn) return 'Hay una muralla de otro jugador.';
     if (!owner && !visibleTo(game, map, game.turn).has(key(t.col, t.row))) return 'Tienes que ver esa casilla (con una tropa, ciudad o torre tuya cerca).';
     if (game.players[game.turn].gold < ECON.roadCost) return `Te falta oro (un camino cuesta ${ECON.roadCost}).`;
     return null;
   }
   function canOfferRoad(game, map, t) { // si tiene sentido enseñar el botón
-    if (!t || t.terrain === 'mar' || t.terrain === 'costa' || hasRoad(game, t.col, t.row) || structAt(game, t.col, t.row)) return false;
+    const st = t && structAt(game, t.col, t.row);
+    if (!t || t.terrain === 'mar' || t.terrain === 'costa' || hasRoad(game, t.col, t.row) || (st && (st.kind === 'torre' || st.owner !== game.turn))) return false;
     const owner = ownerOfTile(game, t.col, t.row);
     return owner ? owner.owner === game.turn : visibleTo(game, map, game.turn).has(key(t.col, t.row));
   }
@@ -412,6 +415,8 @@
       for (const [c, r] of M.neighbors(cur.col, cur.row, map.cols, map.rows)) {
         const k = key(c, r);
         if (seen.has(k) || !hasRoad(game, c, r)) continue;
+        const w = game.walls && game.walls[k];
+        if (w && w.owner !== owner) continue; // una muralla de otro corta el camino
         seen.add(k);
         const city = cityAt(game, c, r);
         if (city && city.owner !== owner) continue; // una ciudad enemiga corta el camino
@@ -510,7 +515,7 @@
     if (cityAt(game, t.col, t.row)) return 'Aquí está la ciudad.';
     if (structAt(game, t.col, t.row)) return 'Ya hay una muralla o una torre.';
     if (game.buildings[key(t.col, t.row)]) return 'Hay un edificio.';
-    if (game.roads[key(t.col, t.row)]) return 'Hay un camino.';
+    if (kind === 'torre' && game.roads[key(t.col, t.row)]) return 'Hay un camino.';
     if (!hasTech(game, game.turn, 'fortificacion')) return 'Necesitas la tecnología Fortificación (rama Guerra).';
     const owner = ownerOfTile(game, t.col, t.row);
     if (owner && owner.owner !== game.turn) return 'Es territorio enemigo.';
@@ -528,7 +533,7 @@
   }
   function canOfferStruct(game, map, t) {
     if (!t || !ground(t).walk || t.terrain === 'rio' || cityAt(game, t.col, t.row) || structAt(game, t.col, t.row)
-      || game.buildings[key(t.col, t.row)] || game.roads[key(t.col, t.row)]) return false;
+      || game.buildings[key(t.col, t.row)]) return false;
     const owner = ownerOfTile(game, t.col, t.row);
     return owner ? owner.owner === game.turn : visibleTo(game, map, game.turn).has(key(t.col, t.row));
   }
@@ -585,6 +590,40 @@
   function wallBonus(game, u) {
     const w = game && game.walls && game.walls[key(u.col, u.row)];
     return w && w.owner === u.owner ? ECON.wallDefense : 0;
+  }
+
+  // --- Derribar lo tuyo y despedir tropas ----------------------------------------
+  // what: 'edificio' (en tu territorio), 'muralla' o 'torre' (tuyas), 'camino' (en tu territorio). Cuesta oro.
+  function demolishOptions(game, map, t) {
+    if (!t) return [];
+    const k = key(t.col, t.row), owner = ownerOfTile(game, t.col, t.row), mine = owner && owner.owner === game.turn, out = [];
+    if (game.buildings[k] && mine) out.push({ what: 'edificio', label: BUILDINGS[game.buildings[k]].label });
+    const st = structAt(game, t.col, t.row);
+    if (st && st.owner === game.turn) out.push({ what: st.kind, label: STRUCTS[st.kind].label });
+    if (game.roads[k] && mine) out.push({ what: 'camino', label: t.terrain === 'rio' ? 'Puente' : 'Camino' });
+    return out;
+  }
+  function demolishProblem(game, map, t, what) {
+    if (!demolishOptions(game, map, t).some(x => x.what === what)) return 'No hay nada tuyo que derribar.';
+    const u = unitAt(game, t.col, t.row);
+    if (u && u.owner !== game.turn) return 'Hay una tropa enemiga encima.';
+    if (game.players[game.turn].gold < ECON.demolishCost) return `Te falta oro (cuesta ${ECON.demolishCost}).`;
+    return null;
+  }
+  function demolish(game, map, t, what) {
+    if (demolishProblem(game, map, t, what)) return null;
+    const k = key(t.col, t.row);
+    game.players[game.turn].gold -= ECON.demolishCost;
+    if (what === 'edificio') delete game.buildings[k];
+    else if (what === 'muralla') delete game.walls[k];
+    else if (what === 'torre') delete game.towers[k];
+    else if (what === 'camino') delete game.roads[k];
+    return what;
+  }
+  function dismiss(game, map, u) {
+    if (!u || u.owner !== game.turn) return null;
+    game.units = game.units.filter(x => x !== u);
+    return true;
   }
 
   // --- Lo que ve cada jugador (tropas, ciudades y torres) ------------------------
@@ -650,6 +689,8 @@
         const city = cityAt(game, c, r), u = unitAt(game, c, r);
         if (city && !allowed.includes(city.owner)) continue; // una ciudad de otro corta el camino
         if (u && !allowed.includes(u.owner)) continue;       // y una tropa de otro, también
+        const w = game.walls && game.walls[k];
+        if (w && !allowed.includes(w.owner)) continue;       // y una muralla de otro
         prev.set(k, ck); queue.push({ col: c, row: r });
       }
     }
@@ -783,7 +824,19 @@
     const c = game && cityAt(game, u.col, u.row);
     return c && c.fort && c.owner === u.owner ? ECON.fortDefense : 0;
   }
-  function defenseOf(map, u, game) { return Math.max(0, UNITS[u.type].def + terrainDef(map, u, undefined, undefined, game) + fortBonus(game, u) + wallBonus(game, u)); }
+  // Las ventajas de defensa no se suman: cuenta solo la mayor (terreno, fortificación o muralla).
+  // Lo que resta (el río) sí se aplica siempre.
+  function defenseBonus(map, u, game) {
+    const parts = [
+      { why: 'terreno', n: terrainDef(map, u, undefined, undefined, game) },
+      { why: 'fortificación', n: fortBonus(game, u) },
+      { why: 'muralla', n: wallBonus(game, u) },
+    ];
+    const best = parts.reduce((a, b) => (b.n > a.n ? b : a), { why: null, n: 0 });
+    const minus = parts.filter(x => x.n < 0).reduce((a, x) => a + x.n, 0);
+    return { n: best.n + minus, why: best.why, best: best.n, minus };
+  }
+  function defenseOf(map, u, game) { return Math.max(0, UNITS[u.type].def + defenseBonus(map, u, game).n); }
   function weak(u) { return u.hp * 2 < UNITS[u.type].hp; } // menos de la mitad de vida
   // Daño = 3 x ataque - defensa (con el terreno). Herido: 1 menos. Siempre al menos 1.
   function damage(game, map, att, def, attHp) {
@@ -957,6 +1010,8 @@
       case 'golpe': return u && hitStruct(game, map, u, o.col, o.row);
       case 'cambiar': return city && trade(game, map, city, o.to);
       case 'ruta': return u && openRoute(game, map, u);
+      case 'derribar': return t && demolish(game, map, t, o.what);
+      case 'despedir': return u && dismiss(game, map, u);
       case 'road': return t && buildRoad(game, map, t);
       case 'nivel': return city && levelUp(game, map, city);
       case 'ampliar': return city && expand(game, map, city);
@@ -984,6 +1039,7 @@
     hasRoad, roadProblem, canOfferRoad, buildRoad, connectedCities,
     ensure, BIG, STRUCTS, bigOptions, bigNeighbors, cityHas, buildCost, structAt, structProblem, canOfferStruct, buildStruct,
     repairProblem, repair, structTargets, structDamage, hitStruct, wallBonus, visibleTo, markExplored, isExplored,
+    defenseBonus, demolishOptions, demolishProblem, demolish, dismiss,
     tradeProblem, trade, routePath, routeGold, routeProblem, openRoute, routeCities };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PERules = api;

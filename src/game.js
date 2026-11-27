@@ -222,8 +222,9 @@
         if (st.kind === 'muralla') {
           let mask = 0;
           sideNeighbors(t.col, t.row).forEach(([c, r], i) => { if (R.structAt(game, c, r) || R.cityAt(game, c, r)) mask |= 1 << i; });
-          key = `wall_${f}_${mask}_${hurt}`;
-          if (!this.textures.exists(key)) this.addTex(key, T.makeWallCanvas(FACTION_COLORS[f], mask, !!hurt));
+          const gate = game.roads[R.key(t.col, t.row)] ? 1 : 0; // un camino que la cruza: se dibuja una puerta
+          key = `wall_${f}_${mask}_${hurt}_${gate}`;
+          if (!this.textures.exists(key)) this.addTex(key, T.makeWallCanvas(FACTION_COLORS[f], mask, !!hurt, !!gate));
         } else {
           key = `tower_${f}_${hurt}`;
           if (!this.textures.exists(key)) this.addTex(key, T.makeTowerCanvas(FACTION_COLORS[f], !!hurt));
@@ -251,7 +252,7 @@
         const ckey = `city_${f}_${citySize(lvl)}_${c.capital ? 1 : 0}_${c.fort ? 1 : 0}`;
         if (!this.textures.exists(ckey)) this.addTex(ckey, T.makeCityCanvas(FACTION_COLORS[f], citySize(lvl), c.capital, c.fort));
         const img = this.add.image(o.x, o.y, ckey).setOrigin(0, 0).setDepth(c.row + 0.6);
-        const label = this.add.text(o.x + T.W / 2, o.y + T.TOP + T.H + 2, `${cityName(c)} · Nv ${lvl}`,
+        const label = this.add.text(o.x + T.W / 2, o.y + T.TOP + T.H + 2, `${cityName(c)} · Nv ${lvl} · ⚔${R.cityUnits(game, c).length}/${R.cityCapacity(game, map, c)}`,
           { fontFamily: 'monospace', fontStyle: 'bold', fontSize: '9px', color: f === 1 ? '#2b1d3a' : '#ffffff',
             backgroundColor: FACTION_COLORS[f], padding: { x: 3, y: 1 } }).setResolution(6).setOrigin(0.5, 0.5).setDepth(990); // el nombre siempre por encima
         this.layer.add([img, label]); this.cityObjs.push(img, label);
@@ -525,6 +526,28 @@
       this.selectUnit(canLeave ? u : null);
       ui.say(`${unitName(u)} golpea ${what} de ${nameOf(r.owner)} y le quita ${r.dealt}.` + (r.destroyed ? ' ¡La derriba!' : ''));
     }
+    // Derribar algo tuyo (con pregunta antes) y despedir tropas.
+    askDemolish(t, d) {
+      ui.overlay(`¿Derribar ${d.label.toLowerCase()}?`, `Cuesta ${R.ECON.demolishCost} de oro y no se devuelve nada.`, 'Sí, derribar', '#b0402f',
+        () => this.doDemolish(t, d.what), true, { cancel: 'No' });
+    }
+    doDemolish(t, what) {
+      if (!this.order({ a: 'derribar', col: t.col, row: t.row, what })) return;
+      this.applyFog(); saveGame(); ui.refreshRes();
+      this.showTile(t);
+      ui.say('Derribado.');
+    }
+    askDismiss(u) {
+      ui.overlay(`¿Despedir ${R.UNITS[u.type].label.toLowerCase()}?`, 'Desaparece del mapa y deja libre su plaza en la ciudad. No recibes nada a cambio.', 'Sí, despedir', '#b0402f',
+        () => this.doDismiss(u), true, { cancel: 'No' });
+    }
+    doDismiss(u) {
+      const name = unitName(u);
+      if (!this.order({ a: 'despedir', u: u.id })) return;
+      this.drawUnits(); this.applyFog(); saveGame();
+      this.selectUnit(null);
+      ui.say(`${name} se va a casa.`);
+    }
     doStruct(t, kind) {
       if (!this.order({ a: kind === 'muralla' ? 'muro' : 'torre', col: t.col, row: t.row })) return;
       this.applyFog(); saveGame(); ui.refreshRes();
@@ -650,6 +673,8 @@
         else if (o.a === 'golpe' && u) { const s = R.structAt(g, o.col, o.row); if (s) await this.doHit(u, s); }
         else if (o.a === 'cambiar' && c) this.doTrade(c, o.to);
         else if (o.a === 'ruta' && u) this.doRoute(u);
+        else if (o.a === 'derribar') this.doDemolish(M.tileAt(state.map, o.col, o.row), o.what);
+        else if (o.a === 'despedir' && u) this.doDismiss(u);
         else if (o.a === 'road') this.doRoad(M.tileAt(state.map, o.col, o.row));
         else if (o.a === 'recruit' && c) this.doRecruit(c, o.type);
         else if (o.a === 'heal' && u) this.doHeal(u);
@@ -877,12 +902,14 @@
     },
     onUnit(u) {
       const map = state.map, g = state.game, s = R.UNITS[u.type];
-      const bonus = R.terrainDef(map, u, undefined, undefined, g);
+      const db = R.defenseBonus(map, u, g);
       const t = M.tileAt(map, u.col, u.row);
       let txt = `${unitName(u)} · Vida ${u.hp}/${s.hp} · Ataque ${s.atk} · Defensa ${R.defenseOf(map, u, g)}`;
-      if (bonus) txt += ` (${bonus > 0 ? '+' : ''}${bonus} por ${M.TERRAIN[t.terrain].label.toLowerCase()})`;
-      if (R.fortBonus(g, u)) txt += ` (+${R.fortBonus(g, u)} por la fortificación)`;
-      if (R.wallBonus(g, u)) txt += ` (+${R.wallBonus(g, u)} por la muralla)`;
+      const why = db.why === 'terreno' ? M.TERRAIN[t.terrain].label.toLowerCase() : db.why === 'muralla' ? 'la muralla' : 'la fortificación';
+      const bits = [db.best > 0 ? `+${db.best} por ${why}` : '', db.minus ? `${db.minus} por el río` : ''].filter(Boolean);
+      if (bits.length) txt += ` (${bits.join(', ')})`;
+      const home = u.home && R.cityById(g, u.home);
+      txt += home ? ` · Es de ${cityName(home)}` : ' · No ocupa plaza en ninguna ciudad';
       txt += ` · Mueve ${s.move}` + (s.range > 1 ? ` · Alcance ${s.range}` : '');
       txt += ` · Ve a ${R.visionOf(map, u)}`;
       txt += ` · ${R.CLASSES[s.cls].label}` + s.skills.map(k => ` · ${R.SKILLS[k].label}: ${R.SKILLS[k].text}`).join('');
@@ -905,6 +932,7 @@
           else head = `Aquí no se puede fundar: ${problem}${where}`;
           txt = `${head} · ${txt}`;
         }
+        actions.push({ label: 'Despedir', onClick: () => sc.askDismiss(u) });
         if (R.has(u, 'comerciante')) {
           const problem = R.routeProblem(g, map, u);
           actions.push({ label: 'Abrir ruta de comercio', main: !problem, disabled: !!problem, onClick: () => sc.doRoute(u) });
@@ -923,6 +951,9 @@
       }
       const c = R.cityAt(g, u.col, u.row);
       if (c) txt += ` · Está en ${cityName(c)}: toca otra vez para ver la ciudad.`;
+      // Despedir va el último (es lo que menos se usa).
+      const di = actions.findIndex(a => a.label === 'Despedir');
+      if (di >= 0) actions.push(actions.splice(di, 1)[0]);
       ui.setActions(actions);
       ui.say(txt);
     },
@@ -976,6 +1007,10 @@
       if (st && st.owner === gm.turn && st.hp < st.max) {
         const problem = R.repairProblem(gm, map, t);
         actions.push({ label: `Reparar (${R.ECON.repairCost} oro)`, main: !problem, disabled: !!problem, onClick: () => sc.doRepair(t) });
+      }
+      for (const d of R.demolishOptions(gm, map, t)) {
+        const problem = R.demolishProblem(gm, map, t, d.what);
+        actions.push({ label: `Derribar ${d.label.toLowerCase()} (${R.ECON.demolishCost} oro)`, disabled: !!problem, onClick: () => sc.askDemolish(t, d) });
       }
       if (R.canOfferStruct(gm, map, t)) {
         const lock = R.hasTech(gm, gm.turn, 'fortificacion') ? '' : ' 🔒';

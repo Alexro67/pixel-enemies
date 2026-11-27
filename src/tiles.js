@@ -436,7 +436,7 @@
 
   // --- Murallas y torres --------------------------------------------------------
   // Muralla: tramos de piedra desde el centro hacia los lados que tocan otra muralla o torre (mask: E, O, NO, NE, SO, SE).
-  function makeWallCanvas(color, mask, damaged) {
+  function makeWallCanvas(color, mask, damaged, gate) {
     const p = new Pix(TW, TH), oy = TOP;
     const [r, g, b] = hex2rgb(color);
     const ends = [[W - 3, H / 2], [3, H / 2], [W / 4 + 1, H / 8 + 2], [W * 3 / 4 - 1, H / 8 + 2], [W / 4 + 1, H * 7 / 8 - 2], [W * 3 / 4 - 1, H * 7 / 8 - 2]];
@@ -457,10 +457,23 @@
       }
       if ((x + y) % 4 < 2) { p.set(x, oy + y - 10, '#d4cfc0'); p.set(x, oy + y - 11, '#e6e1d4'); }
     }
-    // pilar central con un estandarte del color del dueño
-    p.rect(cx - 3, oy + cy - 14, 6, 14, '#c9c3b4'); p.rect(cx + 1, oy + cy - 14, 2, 14, '#9e988a');
-    p.rect(cx - 1, oy + cy - 22, 1, 8, '#3b2414');
-    for (let y = 0; y < 4; y++) for (let x = 0; x < 6; x++) p.set(cx + x, oy + cy - 22 + y, [r, g, b]);
+    if (gate) {
+      // puerta: dos torreones con un arco y portón de madera abierto
+      for (const gx of [cx - 9, cx + 4]) {
+        p.rect(gx, oy + cy - 16, 6, 18, '#c9c3b4'); p.rect(gx + 4, oy + cy - 16, 2, 18, '#9e988a');
+        for (let k = 0; k < 3; k++) p.rect(gx + k * 2, oy + cy - 18, 1, 2, '#d8d2c4');
+      }
+      p.rect(cx - 3, oy + cy - 13, 7, 3, '#bdb6a6');
+      p.ellipse(cx + 0.5, oy + cy - 4, 3.5, 6, null, (u, v) => (v < -0.6 && Math.abs(u) > 0.7 ? null : '#2a1e16'));
+      p.rect(cx - 3, oy + cy - 4, 1, 6, C.woodD); p.rect(cx + 3, oy + cy - 4, 1, 6, C.woodD);
+      p.rect(cx - 1, oy + cy - 24, 1, 8, '#3b2414');
+      for (let y = 0; y < 4; y++) for (let x = 0; x < 6; x++) p.set(cx + x, oy + cy - 24 + y, [r, g, b]);
+    } else {
+      // pilar central con un estandarte del color del dueño
+      p.rect(cx - 3, oy + cy - 14, 6, 14, '#c9c3b4'); p.rect(cx + 1, oy + cy - 14, 2, 14, '#9e988a');
+      p.rect(cx - 1, oy + cy - 22, 1, 8, '#3b2414');
+      for (let y = 0; y < 4; y++) for (let x = 0; x < 6; x++) p.set(cx + x, oy + cy - 22 + y, [r, g, b]);
+    }
     return p.done();
   }
   // Torre de vigía: alta, de piedra, con almenas y la bandera del dueño.
