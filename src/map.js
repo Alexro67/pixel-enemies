@@ -33,13 +33,14 @@
     montana:  { label: 'Montaña' },
     rio:      { label: 'Río', fresh: true },
   };
+  // Recursos NATURALES que trae el mapa. Los edificios que los aprovechan los construye el jugador.
+  // (La cantera no es un recurso: se construye en cualquier montaña sin mineral.)
   const RESOURCE = {
-    caza:    { label: 'Caza', kind: 'comida' },
-    pesca:   { label: 'Pesca', kind: 'comida' },
-    trigo:   { label: 'Trigo', kind: 'comida' },
-    mineral: { label: 'Mineral', kind: 'oro' },
-    cantera: { label: 'Cantera', kind: 'oro' },
-    lena:    { label: 'Leña', kind: 'oro' },
+    caza:    { label: 'Animales', kind: 'comida', build: 'Puesto de caza' },
+    pesca:   { label: 'Peces', kind: 'comida', build: 'Puerto pesquero' },
+    trigo:   { label: 'Trigo silvestre', kind: 'comida', build: 'Plantación de trigo' },
+    mineral: { label: 'Vetas de mineral', kind: 'oro', build: 'Mina' },
+    lena:    { label: 'Madera buena', kind: 'oro', build: 'Aserradero' },
   };
 
   // --- Azar con semilla ---------------------------------------------------
@@ -233,9 +234,9 @@
 
     // Recursos: cambian el dibujo de la propia casilla.
     const options = {
-      llanura: ['trigo', 'trigo', 'cantera'],
+      llanura: ['trigo'],
       bosque: ['caza', 'lena'],
-      montana: ['mineral', 'mineral', 'cantera'],
+      montana: ['mineral'],
       costa: ['pesca'],
       rio: ['pesca'],
     };

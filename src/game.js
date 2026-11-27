@@ -35,7 +35,7 @@
     }
 
     makeTextures() {
-      const combos = { llanura: ['trigo', 'cantera'], bosque: ['caza', 'lena'], montana: ['mineral', 'cantera'],
+      const combos = { llanura: ['trigo'], bosque: ['caza', 'lena'], montana: ['mineral'],
         costa: ['pesca'], rio: ['pesca'], mar: [] };
       for (const terrain of Object.keys(M.TERRAIN).filter(k => k !== 'rio'))
         for (const res of [null, ...combos[terrain]])
@@ -238,7 +238,8 @@
       if (t.hidden) { el.textContent = 'Casilla sin explorar'; return; }
       const terr = M.TERRAIN[t.terrain].label;
       let txt = terr;
-      if (t.resource) { const r = M.RESOURCE[t.resource]; txt += ` · ${r.label} (da ${r.kind})`; }
+      if (t.resource) { const r = M.RESOURCE[t.resource]; txt += ` · ${r.label} (${r.kind}). Se puede construir: ${r.build}`; }
+      else if (t.terrain === 'montana') txt += ' · Se puede construir: Cantera (oro)';
       if (startIdx >= 0) txt += ` · Salida de ${FACTION_NAMES[startIdx]}`;
       el.textContent = txt;
     },

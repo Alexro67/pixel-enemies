@@ -172,21 +172,32 @@
       p.set(x, oy + y, hi); p.set(x + 1, oy + y - 1, hi); p.set(x + 2, oy + y - 1, hi); p.set(x + 3, oy + y, hi);
     }
   }
-  function wheatField(p, oy, r) {
-    // tierra arada en surcos y espigas creciendo
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      if (edgeDist(x, y) < 4) continue;
-      const band = (x + y * 2) % 8;
-      p.set(x, oy + y, band < 2 ? C.furrow : band < 3 ? '#b38d45' : '#c9a24a');
+  // Trigo silvestre: matas sueltas de espigas doradas entre la hierba (sin arar).
+  function wildWheat(p, oy, r) {
+    const clumps = [];
+    for (let tries = 0; clumps.length < 7 && tries < 80; tries++) {
+      const x = 8 + Math.floor(r() * (W - 16)), y = 10 + Math.floor(r() * (H - 16));
+      if (edgeDist(x, y) < 6 || clumps.some(c => Math.abs(c.x - x) < 9 && Math.abs(c.y - y) < 7)) continue;
+      clumps.push({ x, y });
     }
-    for (let y = 8; y < H - 2; y += 3) for (let x = 4; x < W - 3; x += 3) {
-      const xx = x + ((y / 3) % 2 ? 1 : 0) + Math.floor(r() * 2);
-      if (edgeDist(xx, y) < 5) continue;
-      const h = 4 + Math.floor(r() * 3);
-      for (let k = 0; k < h; k++) p.set(xx, oy + y - k, k < 2 ? C.wheatD : C.wheat);
-      p.set(xx, oy + y - h, C.wheatHi); p.set(xx + 1, oy + y - h + 1, C.wheat); p.set(xx - 1, oy + y - h + 1, C.wheatD);
-    }
+    clumps.sort((a, b) => a.y - b.y).forEach(({ x, y }) => {
+      shadowSoft(p, x + 1, oy + y + 1, 5, 1.5);
+      // tallos verdes que se abren en abanico, con la espiga dorada arriba y sus barbas
+      for (const k of [-4, -2, 0, 2, 4]) {
+        const h = 8 + Math.floor(r() * 3) - Math.abs(k) / 2;
+        let tx = x, ty = oy + y;
+        for (let j = 0; j < h; j++) {
+          tx = x + Math.round(k * j / h);
+          p.set(tx, ty - j, j < h - 4 ? '#6f9a38' : C.wheatD);
+        }
+        const hx = tx, hy = ty - h;
+        p.set(hx, hy, C.wheat); p.set(hx, hy - 1, C.wheatHi); p.set(hx, hy - 2, C.wheat); p.set(hx, hy - 3, C.wheatHi);
+        p.set(hx - 1, hy - 1, C.wheatD); p.set(hx + 1, hy - 2, C.wheatD);
+        p.set(hx + (k < 0 ? -1 : 1), hy - 4, '#f3e2a2');
+      }
+    });
   }
+
   // Un bloque de piedra cortada visto en perspectiva (cara de arriba clara, frente y lado).
   function block(p, x, y, w, h) {
     p.rect(x, y, w, 2, '#e4e0d4');            // arriba
@@ -195,7 +206,7 @@
     p.rect(x, y + 2 + h, w + 2, 1, '#4c4a43'); // sombra
     p.set(x + 1, y + 4, '#d4d0c4');
   }
-  // Cantera: una roca grande natural a la que le han cortado un trozo en bloques rectos
+  // Cantera (edificio que construirá el jugador; aún no se usa en el mapa): una roca grande natural a la que le han cortado un trozo en bloques rectos
   // (se ve la piedra clara recién cortada), con una grúa de madera y bloques apilados.
   function quarry(p, oy, onMountain) {
     const base = oy + 32, h = onMountain ? 1.7 : 1;
@@ -234,15 +245,10 @@
     p.line(23, base + 12, 27, base + 5, '#7a5a3a');
     p.line(24, base + 4, 30, base + 6, '#c8ccd2'); p.set(24, base + 3, '#c8ccd2');
   }
-  function mineEntrance(p, cx, base) {
-    p.rect(cx - 5, base - 9, 10, 9, C.woodD);
-    p.rect(cx - 4, base - 8, 8, 8, '#1a1410');
-    p.rect(cx - 5, base - 10, 10, 2, C.wood); p.rect(cx - 5, base - 10, 10, 1, C.woodHi);
-    p.rect(cx - 6, base - 9, 2, 9, C.wood); p.rect(cx + 4, base - 9, 2, 9, C.wood);
-    // vagoneta con oro
-    p.rect(cx + 8, base - 4, 7, 4, '#5a5a62'); p.rect(cx + 8, base - 4, 7, 1, '#8a8a94');
-    p.set(cx + 9, base - 5, C.gold); p.set(cx + 10, base - 6, C.goldHi); p.set(cx + 12, base - 5, C.gold); p.set(cx + 13, base - 5, C.gold);
-    p.set(cx + 9, base, '#222'); p.set(cx + 13, base, '#222');
+  // Roca con mineral a la vista (brillos dorados).
+  function oreRock(p, x, y) {
+    p.ellipse(x, y - 3, 5, 4, null, (u, v) => (v > 0.6 ? null : -u - v > 0.5 ? '#a8a49a' : -u - v > -0.4 ? '#7d7a71' : '#5f5c55'));
+    p.set(x - 2, y - 5, C.gold); p.set(x - 1, y - 5, C.goldHi); p.set(x + 1, y - 3, C.gold); p.set(x + 2, y - 4, C.gold);
   }
   function goldVeins(p, cx, base, top, halfW, r) {
     for (let i = 0; i < 9; i++) {
@@ -263,14 +269,10 @@
     p.line(x + 6, y - 13, x + 7, y - 16, '#e8dcc0'); p.line(x + 7, y - 15, x + 9, y - 16, '#e8dcc0');
     p.set(x - 5, y - 8, '#f2e6d0'); // rabito
   }
-  function logPile(p, x, y) {
-    for (const [dx, dy] of [[0, 0], [5, 0], [10, 0], [2.5, -4], [7.5, -4], [5, -8]]) {
-      p.ellipse(x + dx, y + dy - 2, 2.6, 2.4, null, (u, v) => (u * u + v * v < 0.25 ? C.woodHi : u * u + v * v < 0.6 ? C.ring : C.woodD));
-    }
-  }
-  function stump(p, x, y, axe) {
-    p.rect(x - 3, y - 3, 6, 3, C.wood); p.ellipse(x, y - 3, 3, 1.5, C.ring);
-    if (axe) { p.line(x + 1, y - 4, x + 4, y - 10, '#7a5a3a'); p.rect(x + 3, y - 11, 3, 2, '#c8ccd2'); }
+  function fallenLog(p, x, y) {
+    p.rect(x, y - 4, 16, 4, C.wood); p.rect(x, y - 4, 16, 1, C.woodHi); p.rect(x, y - 1, 16, 1, C.woodD);
+    p.ellipse(x + 16, y - 2, 2, 2.4, null, (u, v) => (u * u + v * v < 0.3 ? C.woodHi : C.ring));
+    p.set(x + 5, y - 5, '#5a9a3a'); p.set(x + 6, y - 6, '#5a9a3a'); p.set(x + 7, y - 5, '#5a9a3a');
   }
   function fish(p, x, y) {
     // pez saltando + ondas
@@ -354,12 +356,11 @@
     if (terrain === 'llanura') {
       side(p, C.dirt);
       face(p, oy, C.grass, r, C.grassEdge);
+      grassTufts(p, oy, r, 10);
       if (resource === 'trigo') {
-        wheatField(p, oy, r);
-      } else if (resource === 'cantera') {
-        quarry(p, oy, false);
+        wildWheat(p, oy, r);
       } else {
-        grassTufts(p, oy, r, 14); flowers(p, oy, r, 6);
+        flowers(p, oy, r, 6);
         if (r() < 0.5) roundTree(p, 12 + Math.floor(r() * 30), oy + 22 + Math.floor(r() * 12), 0.8);
       }
       return p.done();
@@ -372,8 +373,10 @@
         forest(p, r, 5, (x, y) => Math.abs(x - 28) < 12 && Math.abs(y - 28) < 8);
         deer(p, 27, oy + 33);
       } else if (resource === 'lena') {
-        forest(p, r, 4, (x, y) => y > 22);
-        stump(p, 16, oy + 32, true); stump(p, 40, oy + 36, false); logPile(p, 24, oy + 40);
+        // bosque de árboles grandes y viejos, con un tronco caído
+        const big = [[14, 18], [38, 16], [26, 30], [44, 34], [10, 36]];
+        big.forEach(([x, y]) => roundTree(p, x + Math.floor(r() * 3) - 1, oy + y, 1.5));
+        fallenLog(p, 18, oy + 42);
       } else {
         grassTufts(p, oy, r, 6, '#4b8a2e');
         forest(p, r, 8);
@@ -384,13 +387,12 @@
     if (terrain === 'montana') {
       side(p, C.stoneSide);
       face(p, oy, C.rockGround, r, '#7d875a');
-      if (resource === 'cantera') { quarry(p, oy, true); return p.done(); }
       const cx = 30 + Math.floor(r() * 4) - 2, base = oy + 34, top = oy - 30 + Math.floor(r() * 6);
       mountain(p, cx - 15, oy + 26, oy - 8, 11, false); // montañita de atrás
       mountain(p, cx, base, top, 20, true);
       if (resource === 'mineral') {
         goldVeins(p, cx, base, top, 20, r);
-        mineEntrance(p, cx - 6, base + 4);
+        oreRock(p, cx - 9, base + 6); oreRock(p, cx + 12, base + 8);
       } else {
         grassTufts(p, oy, r, 4, '#6f7a48');
       }
