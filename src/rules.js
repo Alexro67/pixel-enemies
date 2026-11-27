@@ -31,8 +31,8 @@
   // Visión: todas ven 1 casilla alrededor; 2 si son exploradoras o están en una montaña.
   // Defensa extra según el terreno, por clase de tropa. El río resta a todos.
   const CLASSES = {
-    infanteria: { label: 'Infantería', terrain: { bosque: 1, montana: 2, rio: -1 } },
-    tirador:    { label: 'Tirador', terrain: { bosque: 2, montana: 1, rio: -1 } },
+    infanteria: { label: 'Infantería', terrain: { bosque: 1, montana: 1, rio: -1 } }, // (Alex: antes montaña +2, demasiado)
+    tirador:    { label: 'Tirador', terrain: { bosque: 1, montana: 1, rio: -1 } },    // (antes bosque +2)
     montada:    { label: 'Montada', terrain: { rio: -1 } }, // a caballo no se esconde en bosque ni montaña
     maquina:    { label: 'Máquina de guerra', terrain: { rio: -1 } }, // cañones y catapultas no se esconden
     naval:      { label: 'Naval', terrain: {} },                          // los barcos no se esconden en ningún sitio
@@ -933,8 +933,21 @@
   function cityDocks(game, map, city, type) {
     return cityTiles(game, map, city).filter(t => {
       const b = game.buildings[key(t.col, t.row)];
-      return b && BUILDINGS[b].dock && (!type || UNITS[type].sea.includes(t.terrain));
+      return b && BUILDINGS[b].dock && (!type || UNITS[type].sea.includes(t.terrain))
+        && (!type || !UNITS[type].sea.includes('mar') || openSea(map).has(key(t.col, t.row))); // carabelas y galeones: costa que da al mar (no un lago)
     });
+  }
+  // Casillas de agua unidas al mar abierto (se calcula una vez por mapa).
+  function openSea(map) {
+    if (map._openSea) return map._openSea;
+    const out = new Set(), queue = map.tiles.filter(t => t.terrain === 'mar');
+    queue.forEach(t => out.add(key(t.col, t.row)));
+    for (let qi = 0; qi < queue.length; qi++) for (const [c, r] of M.neighbors(queue[qi].col, queue[qi].row, map.cols, map.rows)) {
+      const t = M.tileAt(map, c, r);
+      if (t && (t.terrain === 'costa' || t.terrain === 'mar') && !out.has(key(c, r))) { out.add(key(c, r)); queue.push(t); }
+    }
+    map._openSea = out;
+    return out;
   }
 
   // --- Curar ----------------------------------------------------------------
