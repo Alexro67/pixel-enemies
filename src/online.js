@@ -270,51 +270,65 @@
         toast('No estás en esa partida.'); return showList();
       }
       net.doc = doc;
-      if (doc.status === 'sala') { showRoom(doc); net.timer = setInterval(refreshRoom, 5000); return; }
+      if (doc.status === 'sala') { showRoom(doc); net.timer = setInterval(refreshRoom, 4000); return; }
       await showMap(doc, true);
       net.timer = setInterval(poll, POLL_MS);
     } catch (e) { fail(e); showList(); }
   }
 
   // --- Sala de espera --------------------------------------------------------
+  // La sala se dibuja una vez; luego, cada pocos segundos, solo se actualiza la lista de jugadores.
   function showRoom(doc) {
-    const meIdx = doc.seats.findIndex(s => s.uid === myUid()), host = doc.host === myUid();
-    const used = doc.seats.map(s => s.faction);
-    const seats = doc.seats.map((s, i) => `<li><span class="dot" style="background:${F().colors[s.faction]}"></span>
-      <b>${esc(s.name)}</b> · ${F().names[s.faction]}${s.uid === doc.host ? ' (crea la partida)' : ''}</li>`).join('');
-    const factions = F().names.map((n, f) => `<option value="${f}"${f === doc.seats[meIdx].faction ? ' selected' : ''}${used.includes(f) && f !== doc.seats[meIdx].faction ? ' disabled' : ''}>${n}</option>`).join('');
     const s = doc.settings;
     panel(`<h2>Sala de espera</h2>
       <p>Código de la partida</p><div class="code">${doc.code}</div>
       <div class="row"><button id="net-invite" class="main">Invitar amigos</button></div>
-      <p class="small">Mapa ${M.SIZES[s.size].label.toLowerCase()} · ${M.MAP_TYPES[s.type].label} · Recursos ${M.ABUNDANCE[s.abundance].label.toLowerCase()} · Turnos de ${limitText(s.limit)}</p>
-      <ul class="seats">${seats}</ul>
-      <label>Tu facción<select id="net-faction">${factions}</select></label>
-      ${host ? `<p class="small">Cuando estéis todos (de 2 a 6), pulsa Empezar. El orden de los turnos se sortea.</p>
-        <div class="row"><button id="net-back">Mis partidas</button><button id="net-start" class="main"${doc.seats.length < 2 ? ' disabled' : ''}>Empezar</button></div>`
-      : `<p class="small">Esperando a que ${esc(doc.seats.find(x => x.uid === doc.host).name)} empiece la partida...</p>
-        <div class="row"><button id="net-back">Mis partidas</button></div>`}`);
+      <p class="small">Mapa ${M.SIZES[s.size].label.toLowerCase()} · ${M.MAP_TYPES[s.type].label} · ${M.ABUNDANCE[s.abundance].label} · Turnos de ${limitText(s.limit)}</p>
+      <ul class="seats" id="net-seats"></ul>
+      <label>Tu facción<select id="net-faction"></select></label>
+      <p class="small" id="net-wait"></p>
+      <div class="row"><button id="net-back">Mis partidas</button><button id="net-start" class="main" hidden>Empezar</button></div>`);
     $('net-invite').onclick = () => invite(doc.code);
     $('net-back').onclick = showList;
     $('net-faction').onchange = async (e) => {
+      const f = Number(e.target.value);
+      e.target.blur();
       try {
-        const d = await getGame(doc.code), f = Number(e.target.value);
-        if (d.seats.some(x => x.faction === f && x.uid !== myUid())) { toast('Esa facción ya la ha cogido otro.'); return refreshRoom(); }
+        const d = await getGame(doc.code);
+        if (d.seats.some(x => x.faction === f && x.uid !== myUid())) { toast('Esa facción ya la ha cogido otro.'); return refreshRoom(true); }
         await commit([upd(`partidas/${doc.code}`, { seats: d.seats.map(x => (x.uid === myUid() ? Object.assign({}, x, { faction: f }) : x)) }, d._time)]);
-        refreshRoom();
-      } catch (er) { fail(er); refreshRoom(); }
+      } catch (er) { fail(er); }
+      refreshRoom(true);
     };
-    if (host) $('net-start').onclick = () => startMatch(doc.code);
+    $('net-start').onclick = () => startMatch(doc.code);
+    updateRoom(doc);
   }
-  async function refreshRoom() {
+  function updateRoom(doc) {
+    if (!$('net-seats')) return;
+    const meIdx = doc.seats.findIndex(s => s.uid === myUid()), host = doc.host === myUid();
+    const used = doc.seats.map(s => s.faction), mine = doc.seats[meIdx].faction;
+    $('net-seats').innerHTML = doc.seats.map(s => `<li><span class="dot" style="background:${F().colors[s.faction]}"></span>
+      <b>${esc(s.name)}</b> · ${F().names[s.faction]}${s.uid === doc.host ? ' (crea la partida)' : ''}</li>`).join('');
+    const sel = $('net-faction');
+    if (document.activeElement !== sel) {
+      sel.innerHTML = F().names.map((n, f) => `<option value="${f}"${f === mine ? ' selected' : ''}${used.includes(f) && f !== mine ? ' disabled' : ''}>${n}</option>`).join('');
+    }
+    const hostName = (doc.seats.find(x => x.uid === doc.host) || { name: '?' }).name;
+    $('net-wait').textContent = host
+      ? (doc.seats.length < 2 ? 'Esperando a que se una alguien más (mínimo 2, máximo 6).' : `Sois ${doc.seats.length}. Cuando estéis todos, pulsa Empezar. El orden de los turnos se sortea.`)
+      : `Sois ${doc.seats.length}. Esperando a que ${hostName} empiece la partida...`;
+    $('net-start').hidden = !host;
+    $('net-start').disabled = doc.seats.length < 2;
+  }
+  async function refreshRoom(force) {
     if (!net.code || net.busy) return;
     try {
       const doc = await getGame(net.code);
-      if (!doc || net.doc && doc._time === net.doc._time && $('net-box')) return;
+      if (!doc) return;
+      const same = net.doc && doc._time === net.doc._time;
       net.doc = doc;
       if (doc.status !== 'sala') { stopPolling(); return openGame(doc.code); }
-      const focused = document.activeElement && document.activeElement.id === 'net-faction';
-      if (!focused) showRoom(doc);
+      if (!same || force) updateRoom(doc);
     } catch (e) { /* sin conexión: se vuelve a intentar */ }
   }
   function invite(code) {
