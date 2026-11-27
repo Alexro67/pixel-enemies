@@ -333,7 +333,87 @@
     return p.done();
   }
 
-  const DRAW = { colono, miliciano, arquero, jinete, espadachin, lancero, caballero, canon, catapulta, monje, mercader };
+  // --- Barcos (miran a la derecha: la proa está a la derecha) ----------------
+  const HULL = ['#b07a40', '#8a5a2b', '#5e3c1c', '#3e2812'];
+  const SAIL = ['#fbf6e6', '#e6dcc0', '#c4b896'];
+  // Casco: más ancho arriba, con la proa levantada a la derecha.
+  function hull(p, x0, x1, top, deep, stripe) {
+    for (let x = x0; x <= x1; x++) {
+      const k = (x - x0) / (x1 - x0);
+      const lift = k > 0.8 ? Math.round((k - 0.8) * 5 * 3) : k < 0.1 ? Math.round((0.1 - k) * 10 * 2) : 0;
+      const bottom = top + deep - (k > 0.75 ? Math.round((k - 0.75) * 4 * (deep - 2)) : k < 0.12 ? Math.round((0.12 - k) * 8 * (deep - 3)) : 0);
+      for (let y = top - lift; y <= bottom; y++) {
+        const c = y === top - lift ? HULL[0] : y >= bottom - 1 ? HULL[3] : y > top + deep / 2 ? HULL[2] : HULL[1];
+        p.set(x, y, c);
+      }
+      if (stripe) p.set(x, top + 2, stripe);
+    }
+  }
+  function water(p, cx, y, rx) { // espuma alrededor del casco
+    for (let x = -rx; x <= rx; x++) if ((x + 40) % 3 !== 0) p.set(cx + x, y, '#d8eef8', 200);
+    for (let x = -rx + 3; x <= rx - 3; x += 2) p.set(cx + x, y + 1, '#9fd0ea', 160);
+  }
+  // Vela cuadrada hinchada, con el color de la facción en una franja.
+  function squareSail(p, x, y, w, h, c, band) {
+    for (let j = 0; j < h; j++) {
+      const bulge = Math.round(Math.sin((j / (h - 1)) * Math.PI) * 2);
+      for (let i = -bulge; i < w + bulge; i++) {
+        const col = band && j >= Math.floor(h * 0.35) && j < Math.floor(h * 0.65) ? (i < 1 ? c[0] : i > w - 2 ? c[2] : c[1])
+          : (i < 1 ? SAIL[0] : i > w - 2 ? SAIL[2] : SAIL[1]);
+        p.set(x + i, y + j, col);
+      }
+    }
+    p.rect(x - 1, y - 1, w + 2, 1, WOOD[2]); // verga
+  }
+
+  function barca(color) {
+    const c = shades(color), p = new Pix(32, 32);
+    // mástil y vela triangular del color de la facción
+    p.line(15, 6, 15, 22, WOOD[2]);
+    for (let j = 0; j < 13; j++) for (let i = 0; i <= Math.floor(j * 0.75); i++) p.set(16 + i, 8 + j, i === 0 ? c[0] : i >= Math.floor(j * 0.75) - 1 ? c[2] : c[1]);
+    p.rect(14, 4, 3, 2, c[1]);
+    // remero
+    p.rect(8, 17, 4, 5, LEATHER[1]); p.ellipse(10, 15, 2.2, 2.2, null, (u) => (u < -0.3 ? SKIN[1] : SKIN[0]));
+    p.line(6, 21, 2, 27, WOOD[1]);
+    hull(p, 3, 28, 22, 5);
+    water(p, 16, 28, 13);
+    outline(p);
+    return p.done();
+  }
+
+  function carabela(color) {
+    const c = shades(color), p = new Pix(40, 40);
+    p.line(14, 4, 14, 27, WOOD[2]); p.line(26, 7, 26, 27, WOOD[2]);        // dos mástiles
+    squareSail(p, 9, 7, 9, 10, c, true);
+    // vela latina (triangular) en el de popa... aquí a la derecha en proa
+    for (let j = 0; j < 14; j++) for (let i = 0; i <= Math.floor(j * 0.6); i++) p.set(27 + i, 9 + j, i === 0 ? SAIL[0] : SAIL[1]);
+    p.line(26, 8, 36, 22, WOOD[1]);
+    p.rect(13, 1, 4, 3, c[1]); p.set(17, 2, c[2]);                           // banderín
+    p.rect(3, 22, 6, 4, HULL[1]); p.rect(3, 22, 6, 1, HULL[0]);             // castillo de popa
+    hull(p, 2, 37, 26, 7, c[1]);
+    for (let x = 8; x < 32; x += 6) p.set(x, 30, '#2a1a10');                 // portillas
+    water(p, 20, 35, 18);
+    outline(p);
+    return p.done();
+  }
+
+  function galeon(color) {
+    const c = shades(color), p = new Pix(46, 44);
+    p.line(12, 4, 12, 28, WOOD[2]); p.line(23, 1, 23, 28, WOOD[2]); p.line(34, 6, 34, 28, WOOD[2]); // tres mástiles
+    squareSail(p, 8, 7, 9, 8, c, false); squareSail(p, 8, 17, 9, 7, c, true);
+    squareSail(p, 18, 4, 11, 9, c, true); squareSail(p, 18, 15, 11, 8, c, false);
+    squareSail(p, 30, 9, 8, 8, c, true);
+    p.rect(22, 0, 5, 3, c[1]); p.rect(22, 0, 5, 1, c[0]);                     // bandera
+    p.line(34, 7, 44, 24, WOOD[1]);                                          // bauprés
+    p.rect(2, 22, 10, 6, HULL[1]); p.rect(2, 22, 10, 1, HULL[0]); p.rect(3, 24, 2, 2, '#f0d070'); p.rect(7, 24, 2, 2, '#f0d070'); // popa alta con ventanas
+    hull(p, 2, 43, 28, 9, '#d8b04a');
+    for (let x = 9; x < 38; x += 5) { p.rect(x, 32, 2, 2, '#1a1410'); p.set(x + 2, 32, STEEL[2]); } // cañones
+    water(p, 23, 39, 21);
+    outline(p);
+    return p.done();
+  }
+
+  const DRAW = { colono, miliciano, arquero, jinete, espadachin, lancero, caballero, canon, catapulta, monje, mercader, barca, carabela, galeon };
   function makeUnitCanvas(type, color) { return DRAW[type](color); }
 
   root.PEUnits = { makeUnitCanvas, TYPES: Object.keys(DRAW) };

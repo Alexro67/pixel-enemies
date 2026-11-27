@@ -79,7 +79,7 @@ function vapidKeys() {
 // Pasa el turno de quien se ha quedado sin tiempo (lo mismo que haría cualquier jugador al abrir la partida).
 async function timeout(doc, code) {
   const s = doc.settings, game = JSON.parse(doc.game);
-  const map = M.generate({ seed: doc.seed, size: s.size, type: s.type, abundance: s.abundance, players: doc.seats.length });
+  const map = M.generate({ seed: doc.seed, size: s.size, type: s.type, abundance: s.abundance, players: doc.seats.length, gen: s.gen || 1 });
   R.applyCleared(game, map);
   const player = game.turn;
   R.perform(game, map, { a: 'end' });

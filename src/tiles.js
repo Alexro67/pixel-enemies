@@ -379,6 +379,21 @@
     p.set(cx + 10, vy - 5, C.gold); p.set(cx + 12, vy - 6, C.goldHi); p.set(cx + 14, vy - 5, C.gold); p.set(cx + 11, vy - 5, '#7d7a71');
     p.rect(cx + 9, vy, 2, 2, '#2a2a2a'); p.rect(cx + 14, vy, 2, 2, '#2a2a2a');
   }
+  // Muelle para barcos: embarcadero largo de tablas sobre pilotes, con un noray y una caseta.
+  function dock(p, w, river) {
+    const x0 = river ? 12 : 6, y0 = river ? 22 : 18;
+    for (let k = 0; k < 11; k++) {
+      p.rect(x0 + k * 3, w + y0, 2, 7, k % 2 ? C.wood : C.woodHi);
+      p.rect(x0 + k * 3, w + y0 + 7, 2, 2, C.woodD);
+    }
+    p.rect(x0, w + y0 + 7, 33, 1, C.woodD);
+    [0, 15, 30].forEach(dx => { p.rect(x0 + dx, w + y0 + 9, 2, 5, '#4a3018'); p.set(x0 + dx, w + y0 + 13, '#9fd0ea'); }); // pilotes
+    p.rect(x0 + 2, w + y0 - 9, 9, 9, '#a8743a'); p.rect(x0 + 2, w + y0 - 9, 9, 1, '#d29a52'); p.rect(x0 + 10, w + y0 - 9, 1, 9, '#6a4420'); // caseta
+    p.line(x0 + 1, w + y0 - 9, x0 + 6, w + y0 - 14, '#8a3a2a'); p.line(x0 + 6, w + y0 - 14, x0 + 12, w + y0 - 9, '#6a2a1e');
+    p.rect(x0 + 5, w + y0 - 5, 3, 5, '#3a2614');
+    p.rect(x0 + 26, w + y0 + 1, 3, 3, '#2a2a30'); p.set(x0 + 26, w + y0 + 1, '#6a6a74');                                   // noray
+    p.line(x0 + 28, w + y0 + 3, x0 + 34, w + y0 + 12, '#d9c79a');                                                         // amarra
+  }
   function pier(p, w, river) {
     // muelle de tablas que sale de la orilla y una barca amarrada
     const x0 = river ? 14 : 8, y0 = river ? 30 : 26;
@@ -621,6 +636,7 @@
         if (edgeDist(x, y) === 2) p.set(x, w + y, C.foam);
       }
       if (resource === 'pesca') { fishShadows(p, w, r); if (building) pier(p, w, false); else fish(p, 28 + Math.floor(r() * 6) - 3, w + 22); }
+      else if (building) dock(p, w, false);
       return p.done();
     }
 
@@ -654,6 +670,7 @@
         p.set(x, oy + y, C.reed); p.set(x, oy + y - 1, C.reed); p.set(x, oy + y - 2, '#6aa83f');
       }
       if (resource === 'pesca') { if (building) pier(p, oy, true); else fish(p, 28, oy + 24); }
+      else if (building) dock(p, oy, true);
       return p.done();
     }
 
