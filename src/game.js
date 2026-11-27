@@ -188,7 +188,7 @@
     }
     refreshAll() { state.game.units.forEach(u => this.refreshUnit(u)); }
 
-    // --- Niebla: solo se ve lo que está a 2 casillas de tus tropas -------------
+    // --- Niebla: solo se ve lo que ven tus tropas (1 casilla; 2 si exploran o están en montaña) ---
     isHidden(col, row) {
       const t = M.tileAt(state.map, col, row);
       return !!(t && t.hidden);
@@ -197,7 +197,7 @@
       const map = state.map, game = state.game;
       const mine = game.units.filter(u => u.owner === game.turn);
       map.tiles.forEach((t, i) => {
-        const hidden = state.fog && !mine.some(u => M.distance(t.col, t.row, u.col, u.row) <= 2);
+        const hidden = state.fog && !mine.some(u => M.distance(t.col, t.row, u.col, u.row) <= R.visionOf(map, u));
         this.tileImgs[i].setTexture(hidden ? 'fog' : this.texOf(t));
         this.tileImgs[i].setDepth(M.TERRAIN[t.terrain].water && !hidden ? t.row - 1000 : t.row);
         this.decor[i].forEach(d => d.setVisible(!hidden));
@@ -504,6 +504,7 @@
       let txt = `${unitName(u)} · Vida ${u.hp}/${s.hp} · Ataque ${s.atk} · Defensa ${R.defenseOf(map, u, g)}`;
       if (bonus) txt += ` (${bonus > 0 ? '+' : ''}${bonus} por ${M.TERRAIN[t.terrain].label.toLowerCase()})`;
       txt += ` · Mueve ${s.move}` + (s.range > 1 ? ` · Alcance ${s.range}` : '');
+      txt += ` · Ve a ${R.visionOf(map, u)}`;
       txt += ` · ${R.CLASSES[s.cls].label}` + s.skills.map(k => ` · ${R.SKILLS[k].label}: ${R.SKILLS[k].text}`).join('');
       if (R.weak(u)) txt += ' · Herido: pega 1 menos';
       if (u.owner === g.turn) {
@@ -523,6 +524,7 @@
       if (!g.walk) txt += ' · Las tropas de tierra no pueden entrar';
       else {
         if (g.stop) txt += ' · Al entrar se acaba el movimiento';
+        if (t.terrain === 'montana') txt += ' · Desde aquí se ve a 2 casillas';
         const parts = Object.values(R.CLASSES).map(c => { const b = c.terrain[t.terrain] || 0; return b ? `${c.label} ${b > 0 ? '+' : ''}${b}` : null; }).filter(Boolean);
         if (parts.length) txt += ` · Defensa: ${parts.join(', ')}`;
       }

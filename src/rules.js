@@ -13,7 +13,9 @@
     sinReplica:  { label: 'Sin contraataque', text: 'no devuelve los golpes' },
     pesada:      { label: 'Pesada', text: 'si se mueve, no puede atacar ese turno' },
     hostigador:  { label: 'Hostigador', text: 'puede moverse después de atacar' },
+    explorador:  { label: 'Explorador', text: 've a 2 casillas' },
   };
+  // Visión: todas ven 1 casilla alrededor; 2 si son exploradoras o están en una montaña.
   // Defensa extra según el terreno, por clase de tropa. El río resta a todos.
   const CLASSES = {
     infanteria: { label: 'Infantería', terrain: { bosque: 1, montana: 2, rio: -1 } },
@@ -27,7 +29,7 @@
   const UNITS = {
     miliciano: { label: 'Miliciano', hp: 10, atk: 2, def: 2, move: 1, range: 1, cost: 2, cls: 'infanteria', skills: [] },
     arquero:   { label: 'Arquero',   hp: 10, atk: 2, def: 1, move: 1, range: 2, cost: 3, cls: 'tirador', skills: ['distancia'] },
-    jinete:    { label: 'Jinete',    hp: 10, atk: 2, def: 1, move: 2, range: 1, cost: 4, cls: 'montada', skills: ['hostigador'] },
+    jinete:    { label: 'Jinete',    hp: 10, atk: 2, def: 1, move: 2, range: 1, cost: 4, cls: 'montada', skills: ['hostigador', 'explorador'] },
   };
   const ARMIES = { real: ['miliciano'], prueba: ['miliciano', 'arquero', 'jinete'] };
   const has = (u, skill) => UNITS[u.type].skills.includes(skill);
@@ -110,6 +112,10 @@
     return dist;
   }
 
+  function visionOf(map, u) {
+    const t = M.tileAt(map, u.col, u.row);
+    return has(u, 'explorador') || (t && t.terrain === 'montana') ? 2 : 1;
+  }
   function unitAt(game, col, row) { return game.units.find(u => u.col === col && u.row === row) || null; }
   function enemyNear(game, owner, col, row) {
     return game.units.some(u => u.owner !== owner && M.distance(u.col, u.row, col, row) === 1);
@@ -224,7 +230,7 @@
     return reachable(game, map, u).size > 0 || targets(game, u).length > 0;
   }
 
-  const api = { UNITS, SKILLS, CLASSES, TECH_TERRAIN, ARMIES, GROUND, has, newGame, unitAt, reachable, targets, preview, move, attack,
+  const api = { UNITS, SKILLS, CLASSES, TECH_TERRAIN, ARMIES, GROUND, has, visionOf, newGame, unitAt, reachable, targets, preview, move, attack,
     endTurn, defenseOf, terrainDef, weak, canDoSomething, key };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PERules = api;
