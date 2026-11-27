@@ -114,13 +114,14 @@
     dragon:    { label: 'Dragón',    hp: 20, atk: 5, def: 2, move: 3, range: 1, cost: 30, cls: 'volador', skills: ['legendaria', 'vuela', 'fuego'], tech: 'leyendas', needs: 'santuario' },
   };
   // Tropas propias de cada facción: solo las recluta esa facción (y solo en las partidas nuevas, con facciones).
+  // Salen al final de la partida: cada una pide la última tecnología de una rama (Alex).
   Object.assign(UNITS, {
-    arcabucero:    { label: 'Arcabucero', hp: 10, atk: 3, def: 2, move: 1, range: 2, cost: 7, cls: 'tirador', skills: ['distancia', 'baluarte'], tech: 'polvora', faction: 0 },
-    contrabandista: { label: 'Contrabandista', hp: 8, atk: 2, def: 1, move: 2, range: 1, cost: 6, cls: 'infanteria', skills: ['vado', 'roba'], tech: 'caza', faction: 1 },
-    galeote:       { label: 'Galeote', hp: 16, atk: 3, def: 3, move: 3, range: 1, cost: 10, cls: 'naval', skills: ['barco', 'transporte'], tech: 'astilleros', sea: ['costa', 'mar'], carry: 1, faction: 2 },
-    cazador:       { label: 'Cazador de dragones', hp: 10, atk: 2, def: 1, move: 1, range: 2, cost: 6, cls: 'tirador', skills: ['distancia', 'matadragones'], tech: 'arqueria', faction: 3 },
-    guardian:      { label: 'Guardián de las cuevas', hp: 14, atk: 2, def: 4, move: 1, range: 1, cost: 7, cls: 'infanteria', skills: ['cuevas'], tech: 'mineria', faction: 4 },
-    aizkolari:     { label: 'Aizkolari', hp: 12, atk: 5, def: 1, move: 1, range: 1, cost: 8, cls: 'infanteria', skills: [], tech: 'lenadores', faction: 5 },
+    arcabucero:    { label: 'Arcabucero', hp: 10, atk: 3, def: 2, move: 1, range: 2, cost: 7, cls: 'tirador', skills: ['distancia', 'baluarte'], tech: 'ingenieria', faction: 0 },
+    contrabandista: { label: 'Contrabandista', hp: 8, atk: 2, def: 1, move: 2, range: 1, cost: 6, cls: 'infanteria', skills: ['vado', 'roba'], tech: 'rutas', faction: 1 },
+    galeote:       { label: 'Galeote', hp: 16, atk: 3, def: 3, move: 3, range: 1, cost: 10, cls: 'naval', skills: ['barco', 'transporte'], tech: 'armada', sea: ['costa', 'mar'], carry: 1, faction: 2 },
+    cazador:       { label: 'Cazador de dragones', hp: 10, atk: 2, def: 1, move: 1, range: 2, cost: 6, cls: 'tirador', skills: ['distancia', 'matadragones'], tech: 'leyendas', faction: 3 },
+    guardian:      { label: 'Guardián de las cuevas', hp: 14, atk: 2, def: 4, move: 1, range: 1, cost: 7, cls: 'infanteria', skills: ['cuevas'], tech: 'montaneros', faction: 4 },
+    aizkolari:     { label: 'Aizkolari', hp: 12, atk: 5, def: 1, move: 1, range: 1, cost: 8, cls: 'infanteria', skills: [], tech: 'gremios', faction: 5 },
   });
   Object.assign(SKILLS, {
     baluarte:     { label: 'Baluarte', text: '+2 de defensa dentro de una ciudad tuya o sobre tu muralla (se suma a lo demás)' },
