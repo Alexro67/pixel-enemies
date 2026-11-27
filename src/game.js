@@ -132,8 +132,9 @@
       this.tileImgs = [];
       this.decor = [];
       const variant = (t) => (t.col * 7 + t.row * 13) % T.VARIANTS;
-      const tex = (t) => {
-        const b = state.game.buildings[R.key(t.col, t.row)];
+      // bare: sin edificio (lo que se ve de una casilla descubierta que ahora no ves).
+      const tex = (t, bare) => {
+        const b = bare ? null : state.game.buildings[R.key(t.col, t.row)];
         if (b && t.terrain !== 'rio') {
           const key = `t_${t.terrain}_${t.resource || 'nada'}_${variant(t)}_${b}`;
           if (!this.textures.exists(key)) this.addTex(key, T.makeTerrainCanvas(t.terrain, t.resource, variant(t), 0, b));
@@ -207,6 +208,42 @@
         const img = this.add.image(T.tileOrigin(t.col, t.row).x, T.tileOrigin(t.col, t.row).y, key).setOrigin(0, 0).setDepth(t.row + 0.25);
         this.layer.add(img); this.cityObjs.push(img);
       }
+      // Murallas (unidas con las de al lado) y torres, con la vida si están dañadas.
+      const hpTag = (x, y, hp, depth) => {
+        const txt = this.add.text(x, y, String(hp), { fontFamily: 'monospace', fontStyle: 'bold', fontSize: '10px', color: '#ffe08a',
+          stroke: '#1a1420', strokeThickness: 3 }).setResolution(6).setOrigin(0.5, 0.5).setDepth(depth);
+        this.layer.add(txt); this.cityObjs.push(txt);
+      };
+      for (const t of map.tiles) {
+        const st = R.structAt(game, t.col, t.row);
+        if (t.hidden || !st) continue;
+        const f = factionOf(st.owner), hurt = st.hp < R.ECON.structHp ? 1 : 0, o = T.tileOrigin(t.col, t.row);
+        let key;
+        if (st.kind === 'muralla') {
+          let mask = 0;
+          sideNeighbors(t.col, t.row).forEach(([c, r], i) => { if (R.structAt(game, c, r) || R.cityAt(game, c, r)) mask |= 1 << i; });
+          key = `wall_${f}_${mask}_${hurt}`;
+          if (!this.textures.exists(key)) this.addTex(key, T.makeWallCanvas(FACTION_COLORS[f], mask, !!hurt));
+        } else {
+          key = `tower_${f}_${hurt}`;
+          if (!this.textures.exists(key)) this.addTex(key, T.makeTowerCanvas(FACTION_COLORS[f], !!hurt));
+        }
+        const img = this.add.image(o.x, o.y, key).setOrigin(0, 0).setDepth(t.row + 0.6);
+        this.layer.add(img); this.cityObjs.push(img);
+        if (hurt) hpTag(o.x + T.W / 2 + 12, o.y + T.TOP + 8, st.hp, t.row + 0.95);
+      }
+      // Rutas de comercio activas: monedas a lo largo del camino.
+      for (const rt of game.routes || []) {
+        const path = R.routePath(game, map, rt);
+        if (!path) continue;
+        for (const step of path) {
+          const t = M.tileAt(map, step.col, step.row);
+          if (!t || t.hidden || R.cityAt(game, step.col, step.row)) continue;
+          const pos = this.unitPos(step.col, step.row);
+          const coin = this.add.ellipse(pos.x - 12, pos.y - 12, 6, 6, 0xf5cf3a).setStrokeStyle(1, 0x7a5a10).setDepth(t.row + 0.7);
+          this.layer.add(coin); this.cityObjs.push(coin);
+        }
+      }
       for (const c of game.cities) {
         const t = M.tileAt(map, c.col, c.row);
         if (t.hidden) continue;
@@ -271,15 +308,17 @@
     applyFog() {
       const map = state.map, game = state.game;
       const me = state.me === null ? game.turn : state.me; // en online, ves lo tuyo aunque no sea tu turno
-      const mine = game.units.filter(u => u.owner === me);
-      const myCities = game.cities.filter(c => c.owner === me);
+      const seen = R.visibleTo(game, map, me);
+      if (!this.replaying) R.markExplored(game, map, me, seen); // lo que ves ahora queda descubierto para siempre
       map.tiles.forEach((t, i) => {
-        const hidden = state.fog && !mine.some(u => M.distance(t.col, t.row, u.col, u.row) <= R.visionOf(map, u))
-          && !myCities.some(c => M.distance(t.col, t.row, c.col, c.row) <= R.ECON.cityVision);
-        this.tileImgs[i].setTexture(hidden ? 'fog' : this.texOf(t));
-        this.tileImgs[i].setDepth(M.TERRAIN[t.terrain].water && !hidden ? t.row - 1000 : t.row);
+        const hidden = state.fog && !seen.has(R.key(t.col, t.row));
+        // Negra solo si nunca se ha visto; si ya se descubrió, se ve el terreno (sin tropas ni edificios), más oscuro.
+        const black = hidden && !R.isExplored(game, me, i);
+        this.tileImgs[i].setTexture(black ? 'fog' : this.texOf(t, hidden));
+        if (hidden && !black) this.tileImgs[i].setTint(0x6a6a84); else this.tileImgs[i].clearTint();
+        this.tileImgs[i].setDepth(M.TERRAIN[t.terrain].water && !black ? t.row - 1000 : t.row);
         this.decor[i].forEach(d => d.setVisible(!hidden));
-        t.hidden = hidden;
+        t.hidden = hidden; t.black = black;
       });
       this.drawCities();
       this.refreshAll();
@@ -328,7 +367,17 @@
             .setResolution(6).setOrigin(0.5, 0.5).setDepth(e.row + 0.9);
           this.layer.add([img, txt]); this.hlLayer.push(img, txt);
         }
-      } else { this.moves = new Map(); this.targets = []; }
+        // Murallas y torres enemigas que puede golpear.
+        this.structTargets = R.structTargets(game, u).filter(s => !this.isHidden(s.col, s.row));
+        for (const s of this.structTargets) {
+          const o = T.tileOrigin(s.col, s.row);
+          const img = this.add.image(o.x, o.y, 'hl_attack').setOrigin(0, 0).setDepth(s.row + 0.5);
+          const txt = this.add.text(o.x + T.W / 2 - 14, o.y + T.TOP + T.H - 12, `-${Math.min(s.hp, R.structDamage(u))}`,
+            { fontFamily: 'monospace', fontStyle: 'bold', fontSize: '10px', color: '#ffe0d8', stroke: '#5a0d08', strokeThickness: 3 })
+            .setResolution(6).setOrigin(0.5, 0.5).setDepth(s.row + 0.9);
+          this.layer.add([img, txt]); this.hlLayer.push(img, txt);
+        }
+      } else { this.moves = new Map(); this.targets = []; this.structTargets = []; }
       this.layer.sort('depth');
       ui.onUnit(u);
     }
@@ -443,8 +492,71 @@
       this.showTile(M.tileAt(state.map, city.col, city.row));
       ui.say(`¡Nueva ciudad: ${cityName(city)}! Su territorio son las casillas de alrededor que no eran de nadie.`);
     }
-    doBuild(t) {
-      const type = this.order({ a: 'build', col: t.col, row: t.row });
+    // Golpear una muralla o torre enemiga.
+    async doHit(u, s) {
+      this.busy = true;
+      this.clearHighlights(); this.selectTile(null);
+      const ranged = R.UNITS[u.type].range > 1 && M.distance(u.col, u.row, s.col, s.row) > 1;
+      const r = this.order({ a: 'golpe', u: u.id, col: s.col, row: s.row });
+      if (!r) { this.busy = false; return; }
+      const va = this.unitViews.get(u.id), to = this.unitPos(s.col, s.row);
+      if (va) {
+        va.img.setFlipX(to.x < va.x);
+        if (ranged) {
+          const a = this.add.image(va.x, va.y - 18, R.UNITS[u.type].cls === 'maquina' ? 'ball' : 'arrow').setDepth(9999);
+          a.setRotation(Math.atan2(to.y - va.y, to.x - va.x)); this.layer.add(a);
+          await this.tween({ targets: a, x: to.x, y: to.y - 16, duration: 260, ease: 'Quad.easeIn' });
+          a.destroy();
+        } else {
+          const bx = va.x, by = va.y;
+          await this.tween({ targets: va, x: bx + (to.x - bx) * 0.45, y: by + (to.y - by) * 0.45, duration: 110, ease: 'Quad.easeIn' });
+          this.tween({ targets: va, x: bx, y: by, duration: 160, ease: 'Quad.easeOut' });
+        }
+      }
+      const t = this.add.text(to.x, to.y - 40, `-${r.dealt}`, { fontFamily: 'monospace', fontStyle: 'bold', fontSize: '14px',
+        color: '#ff5040', stroke: '#1a0a08', strokeThickness: 4 }).setResolution(6).setOrigin(0.5).setDepth(9999);
+      this.layer.add(t);
+      this.tween({ targets: t, y: t.y - 16, alpha: 0, delay: 350, duration: 500 }).then(() => t.destroy());
+      await this.wait(300);
+      this.applyFog(); saveGame();
+      this.busy = false;
+      const what = r.kind === 'muralla' ? 'la muralla' : 'la torre';
+      const canLeave = !this.replaying && R.reachable(state.game, state.map, u).size > 0;
+      this.selectUnit(canLeave ? u : null);
+      ui.say(`${unitName(u)} golpea ${what} de ${nameOf(r.owner)} y le quita ${r.dealt}.` + (r.destroyed ? ' ¡La derriba!' : ''));
+    }
+    doStruct(t, kind) {
+      if (!this.order({ a: kind === 'muralla' ? 'muro' : 'torre', col: t.col, row: t.row })) return;
+      this.applyFog(); saveGame(); ui.refreshRes();
+      this.showTile(t);
+      ui.say(kind === 'muralla' ? 'Muralla construida: el enemigo no puede pasar por aquí, y tus tropas encima defienden mejor.'
+        : `Torre construida: desde aquí ves a ${R.ECON.towerVision} casillas.`);
+    }
+    doRepair(t) {
+      if (!this.order({ a: 'reparar', col: t.col, row: t.row })) return;
+      this.applyFog(); saveGame(); ui.refreshRes();
+      this.showTile(t);
+      ui.say('Reparada: vuelve a tener toda la vida.');
+    }
+    doTrade(city, to) {
+      if (!this.order({ a: 'cambiar', city: city.id, to })) return;
+      saveGame(); ui.refreshRes();
+      if (this.replaying) return;
+      this.showTile(M.tileAt(state.map, city.col, city.row));
+      ui.say((to === 'oro' ? 'Cambias 2 de comida por 1 de oro.' : 'Cambias 2 de oro por 1 de comida.') + ` Te quedan ${R.ECON.trades - city.trades} cambios en este mercado este turno.`);
+    }
+    doRoute(u) {
+      const problem = R.routeProblem(state.game, state.map, u);
+      if (problem) { ui.say(problem); return; }
+      const rt = this.order({ a: 'ruta', u: u.id });
+      if (!rt) return;
+      this.drawUnits(); this.applyFog(); saveGame(); ui.refreshRes();
+      const [a, b] = R.routeCities(state.game, rt);
+      this.showTile(M.tileAt(state.map, b.col, b.row));
+      ui.say(`¡Ruta de comercio abierta entre ${cityName(a)} y ${cityName(b)}! Cada una gana ${R.routeGold(state.game, state.map, rt)} de oro por turno mientras el camino esté libre.`);
+    }
+    doBuild(t, big) {
+      const type = this.order(big ? { a: 'build', col: t.col, row: t.row, type: big } : { a: 'build', col: t.col, row: t.row });
       if (!type) return;
       this.applyFog(); saveGame(); ui.refreshRes();
       this.showTile(t);
@@ -532,7 +644,12 @@
         if (o.a === 'move' && u) await this.doMove(u, { col: o.col, row: o.row });
         else if (o.a === 'attack' && u) await this.doAttack(u, R.unitById(g, o.t));
         else if (o.a === 'found' && u) this.doFound(u);
-        else if (o.a === 'build') this.doBuild(M.tileAt(state.map, o.col, o.row));
+        else if (o.a === 'build') this.doBuild(M.tileAt(state.map, o.col, o.row), o.type);
+        else if (o.a === 'muro' || o.a === 'torre') this.doStruct(M.tileAt(state.map, o.col, o.row), o.a === 'muro' ? 'muralla' : 'torre');
+        else if (o.a === 'reparar') this.doRepair(M.tileAt(state.map, o.col, o.row));
+        else if (o.a === 'golpe' && u) { const s = R.structAt(g, o.col, o.row); if (s) await this.doHit(u, s); }
+        else if (o.a === 'cambiar' && c) this.doTrade(c, o.to);
+        else if (o.a === 'ruta' && u) this.doRoute(u);
         else if (o.a === 'road') this.doRoad(M.tileAt(state.map, o.col, o.row));
         else if (o.a === 'recruit' && c) this.doRecruit(c, o.type);
         else if (o.a === 'heal' && u) this.doHeal(u);
@@ -658,7 +775,7 @@
       let hit = null;
       for (const t of map.tiles) {
         const o = T.tileOrigin(t.col, t.row);
-        const lower = M.TERRAIN[t.terrain].water && RELIEF && !t.hidden ? T.WATER_DROP : 0;
+        const lower = M.TERRAIN[t.terrain].water && RELIEF && !t.black ? T.WATER_DROP : 0;
         if (T.insideHex(Math.floor(w.x - o.x), Math.floor(w.y - o.y - T.TOP - lower))) hit = t;
       }
       return hit;
@@ -682,6 +799,8 @@
       const sel = this.selected;
       if (sel && sel.owner === game.turn && this.myTurn()) {
         if (touched && this.targets.includes(touched)) return this.doAttack(sel, touched);
+        const hit = !touched && tile && (this.structTargets || []).find(s => s.col === tile.col && s.row === tile.row);
+        if (hit) return this.doHit(sel, hit);
         const dest = tile && this.moves.get(R.key(tile.col, tile.row));
         if (dest && !(touched && touched.owner !== game.turn)) return this.doMove(sel, dest);
       }
@@ -763,6 +882,7 @@
       let txt = `${unitName(u)} · Vida ${u.hp}/${s.hp} · Ataque ${s.atk} · Defensa ${R.defenseOf(map, u, g)}`;
       if (bonus) txt += ` (${bonus > 0 ? '+' : ''}${bonus} por ${M.TERRAIN[t.terrain].label.toLowerCase()})`;
       if (R.fortBonus(g, u)) txt += ` (+${R.fortBonus(g, u)} por la fortificación)`;
+      if (R.wallBonus(g, u)) txt += ` (+${R.wallBonus(g, u)} por la muralla)`;
       txt += ` · Mueve ${s.move}` + (s.range > 1 ? ` · Alcance ${s.range}` : '');
       txt += ` · Ve a ${R.visionOf(map, u)}`;
       txt += ` · ${R.CLASSES[s.cls].label}` + s.skills.map(k => ` · ${R.SKILLS[k].label}: ${R.SKILLS[k].text}`).join('');
@@ -772,7 +892,7 @@
         const canMove = sc.moves && sc.moves.size, canHit = sc.targets && sc.targets.length;
         if (canMove && canHit) txt += '. Azul: moverse. Rojo: atacar.';
         else if (canMove) txt += '. Toca una casilla azul para moverte.';
-        else if (canHit) txt += '. Toca un enemigo en rojo para atacar.';
+        else if (canHit || (sc.structTargets && sc.structTargets.length)) txt += '. Toca un enemigo en rojo para atacar.';
         else if (!R.canDoSomething(g, map, u)) txt += '. Ya ha hecho todo este turno.';
         if (u.type === 'colono') {
           const problem = R.foundProblem(g, map, u);
@@ -784,6 +904,11 @@
           else if (u.acted) head = 'Este colono acaba de salir: podrá moverse y fundar en tu próximo turno.';
           else head = `Aquí no se puede fundar: ${problem}${where}`;
           txt = `${head} · ${txt}`;
+        }
+        if (R.has(u, 'comerciante')) {
+          const problem = R.routeProblem(g, map, u);
+          actions.push({ label: 'Abrir ruta de comercio', main: !problem, disabled: !!problem, onClick: () => sc.doRoute(u) });
+          txt = `${problem || 'Puede abrir aquí una ruta de comercio.'} · ${txt}`;
         }
         if (R.has(u, 'sanador')) {
           const problem = R.blessProblem(g, map, u);
@@ -804,7 +929,8 @@
     onTile(t) {
       ui.setActions([]);
       if (!t) { ui.say('Toca una tropa para moverla, o una ciudad para reclutar.'); return; }
-      if (t.hidden) { ui.say('Casilla sin explorar'); return; }
+      if (t.black) { ui.say('Casilla sin explorar'); return; }
+      if (t.hidden) { ui.say(`${M.TERRAIN[t.terrain].label} · Ya la descubriste, pero ahora no la ves: puede haber tropas o edificios que no sabes.`); return; }
       const gm = state.game, map = state.map, city = R.cityAt(gm, t.col, t.row);
       if (city) { ui.onCity(city); return; }
       const g = R.GROUND[t.terrain];
@@ -820,17 +946,44 @@
       if (gm.roads[R.key(t.col, t.row)]) txt += t.terrain === 'rio' ? ' · Puente' : ' · Camino';
       if (b) txt += ` · ${R.BUILDINGS[b].label}: ${R.givesText(R.buildingGives(gm, map, t))} por turno`;
       else if (t.resource) { const r = M.RESOURCE[t.resource]; txt += ` · ${r.label} (${r.kind})`; }
+      if (b && R.BUILDINGS[b].big) txt += ` (${R.BUILDINGS[b].extra})`;
+      const st = R.structAt(gm, t.col, t.row);
+      if (st) txt += ` · ${st.kind === 'muralla' ? 'Muralla' : 'Torre'} de ${nameOf(st.owner)}, vida ${st.hp}/${R.ECON.structHp}`
+        + (st.kind === 'muralla' ? ': el enemigo no puede pasar' : `: ve a ${R.ECON.towerVision} casillas`);
       const owner = R.ownerOfTile(gm, t.col, t.row);
       txt += owner ? ` · Territorio de ${cityName(owner)}` : ' · Sin dueño';
-      const opt = R.buildOption(gm, map, t), actions = [];
+      const opt = R.buildOption(gm, map, t), actions = [], sc = window.PEGame;
+      const bigs = R.bigOptions(gm, map, t);
       if (opt) {
         const bd = R.BUILDINGS[opt.type];
         const locked = bd.tech && !R.hasTech(gm, gm.turn, bd.tech);
-        actions.push({ label: `${bd.label} (${bd.cost} oro)` + (locked ? ' 🔒' : ''), main: !opt.problem, disabled: !!opt.problem, onClick: () => window.PEGame.doBuild(t) });
+        actions.push({ label: `${bd.label} (${opt.cost} oro)` + (locked ? ' 🔒' : ''), main: !opt.problem, disabled: !!opt.problem, onClick: () => sc.doBuild(t) });
         txt += ` · ${bd.label}: ${R.givesText(bd.gives)} por turno` + (bd.extra ? ` (${bd.extra})` : '');
         if (opt.problem) txt += ` · ${opt.problem}`;
-      } else if (!b && owner && owner.owner === gm.turn && !R.buildingFor(t) && t.terrain !== 'mar' && t.terrain !== 'costa') {
-        txt += ' · Aquí solo se puede hacer un camino';
+      } else if (bigs.length) {
+        // Edificios grandes: solo se enseñan los que ya puedes investigar o tienes.
+        const shown = bigs.filter(x => R.hasTech(gm, gm.turn, R.BUILDINGS[x.type].tech));
+        for (const x of shown) {
+          const bd = R.BUILDINGS[x.type];
+          actions.push({ label: `${bd.label} (${x.cost} oro)`, main: !x.problem, disabled: !!x.problem, onClick: () => sc.doBuild(t, x.type) });
+        }
+        const first = shown.find(x => !x.problem) || shown[0];
+        if (first) txt += ` · ${R.BUILDINGS[first.type].label}: ${R.BUILDINGS[first.type].extra}` + (first.problem ? ` · ${first.problem}` : '');
+        else txt += ' · Aquí podrás hacer un mercado, un taller o un templo (con Comercio, Forja o Monasterios)';
+      } else if (!b && !st && owner && owner.owner === gm.turn && !R.buildingFor(t) && t.terrain !== 'mar' && t.terrain !== 'costa') {
+        txt += ' · Aquí se puede hacer un camino, una muralla o una torre';
+      }
+      if (st && st.owner === gm.turn && st.hp < R.ECON.structHp) {
+        const problem = R.repairProblem(gm, map, t);
+        actions.push({ label: `Reparar (${R.ECON.repairCost} oro)`, main: !problem, disabled: !!problem, onClick: () => sc.doRepair(t) });
+      }
+      if (R.canOfferStruct(gm, map, t)) {
+        const lock = R.hasTech(gm, gm.turn, 'fortificacion') ? '' : ' 🔒';
+        for (const kind of ['muralla', 'torre']) {
+          const problem = R.structProblem(gm, map, t, kind);
+          actions.push({ label: `${R.STRUCTS[kind].label} (${R.STRUCTS[kind].cost()} oro)${lock}`, disabled: !!problem, onClick: () => sc.doStruct(t, kind) });
+          if (problem && kind === 'torre' && /una torre/.test(problem)) txt += ` · ${problem}`;
+        }
       }
       if (R.canOfferRoad(gm, map, t)) {
         const problem = R.roadProblem(gm, map, t);
@@ -845,7 +998,12 @@
       const g = state.game, map = state.map, lvl = R.cityLevel(g, map, c), inc = R.cityIncome(g, map, c);
       const units = R.cityUnits(g, c).length, cap = R.cityCapacity(g, map, c);
       let txt = `${cityName(c)}${c.capital ? ' (capital)' : ''} de ${nameOf(c.owner)} · Nivel ${lvl}/${R.ECON.maxLevel}`;
-      txt += ` · Da ${inc.oro} oro` + (inc.camino ? ` (${inc.camino} por caminos)` : '') + ` y ${inc.comida} comida por turno · Tropas ${units}/${cap}`;
+      const extras = [inc.camino ? `${inc.camino} por caminos` : '', inc.ruta ? `${inc.ruta} por rutas` : ''].filter(Boolean).join(', ');
+      txt += ` · Da ${inc.oro} oro` + (extras ? ` (${extras})` : '') + ` y ${inc.comida} comida por turno · Tropas ${units}/${cap}`;
+      const routes = (g.routes || []).filter(rt => rt.a === c.id || rt.b === c.id);
+      if (routes.length) txt += ' · Rutas: ' + routes.map(rt => { const other = R.cityById(g, rt.a === c.id ? rt.b : rt.a); return `${cityName(other)}` + (R.routeGold(g, map, rt) ? '' : ' (cortada)'); }).join(', ');
+      const bigHere = R.BIG.filter(k => R.cityHas(g, map, c, k)).map(k => R.BUILDINGS[k].label);
+      if (bigHere.length) txt += ` · Con ${bigHere.join(', ').toLowerCase()}`;
       txt += ` · Edificios ${R.cityTiles(g, map, c).filter(t => g.buildings[R.key(t.col, t.row)]).length}`;
       if (c.fort) txt += ` · Fortificada (+${R.ECON.fortDefense} defensa)`;
       const occupier = R.unitAt(g, c.col, c.row);
@@ -859,12 +1017,17 @@
         if (!c.expanded) upgrades.push({ label: `Ampliar territorio (${E.expandCost} oro)`, disabled: !!R.expandProblem(g, map, c), onClick: () => sc.doCity(c, 'ampliar') });
         if (!c.fort) upgrades.push({ label: `Fortificar (${E.fortCost} oro)` + (R.hasTech(g, c.owner, 'fortificacion') ? '' : ' 🔒'), disabled: !!R.fortProblem(g, map, c), onClick: () => sc.doCity(c, 'fortificar') });
         if (!c.expanded && lvl < E.expandLevel) txt += ` · Podrá ampliar su territorio al llegar a nivel ${E.expandLevel}.`;
+        if (R.cityHas(g, map, c, 'mercado')) {
+          for (const to of ['oro', 'comida'])
+            upgrades.push({ label: to === 'oro' ? '2 comida → 1 oro' : '2 oro → 1 comida', disabled: !!R.tradeProblem(g, map, c, to), onClick: () => sc.doTrade(c, to) });
+          txt += ` · Mercado: te quedan ${E.trades - (c.trades || 0)} cambios este turno`;
+        }
         // Solo se enseñan las tropas que ya tienes (las demás salen al investigar).
         const list = R.RECRUITABLE.filter(type => !R.UNITS[type].tech || R.hasTech(g, c.owner, R.UNITS[type].tech)).map(type => {
           const problem = R.recruitProblem(g, map, c, type);
           return { label: `${R.UNITS[type].label} (${R.UNITS[type].cost} comida)`, disabled: !!problem, onClick: () => sc.doRecruit(c, type), problem };
         });
-        const blocked = list.find(x => x.problem && !/comida/.test(x.problem));
+        const blocked = list.find(x => x.problem && !/comida|Solo se recluta/.test(x.problem)) || list.find(x => x.problem && /Solo se recluta/.test(x.problem));
         if (blocked) txt += ` · Reclutar: ${blocked.problem}`;
         ui.setActions(upgrades.concat(list));
       }
@@ -926,6 +1089,7 @@
         if (e.kind === 'conquista') return `¡Has conquistado ${cityName(R.cityById(g, e.city))}!`;
         if (e.kind === 'eliminado') return `${nameOf(e.player)} ha perdido su última ciudad y queda eliminado.`;
         if (e.kind === 'cobro') return `Cobras ${e.oro} de oro y ${e.comida} de comida.`;
+        if (e.kind === 'templo') return `Los templos curan a ${e.n} tropa${e.n > 1 ? 's' : ''}.`;
         return '';
       }).filter(Boolean).join(' ');
       // Aviso si hay enemigos dentro de una de tus ciudades.
