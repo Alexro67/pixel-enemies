@@ -47,7 +47,35 @@
     p.rect(x - 1, y + 5, 3, 2, LEATHER[2]); p.rect(x + 3, y + 5, 3, 2, LEATHER[2]);
   }
 
-  function miliciano(color) {
+  // Sombrero o casco de cada facción (cabeza con centro en cx; la parte de arriba de la cabeza es y=8).
+  // 0 Hondarribia morrión, 1 Irun sombrero de ala, 2 Donosti gorro de marinero,
+  // 3 Lekumberri sombrero de cazador con pluma, 4 Alli capucha, 5 Leitza txapela.
+  function factionHat(p, cx, f, c) {
+    if (f === 0) {
+      p.ellipse(cx, 7.6, 4.3, 3, null, (u, v) => (v > 0.15 ? null : u < -0.2 ? STEEL[0] : STEEL[1]));
+      p.rect(cx - 6, 8, 13, 1, STEEL[2]); p.set(cx - 6, 7, STEEL[1]); p.set(cx + 6, 7, STEEL[1]);
+      p.rect(cx - 1, 3, 3, 2, c[1]); p.set(cx - 2, 3, c[0]);           // penacho
+    } else if (f === 1) {
+      p.rect(cx - 6, 8, 13, 1, '#3e2a1a'); p.rect(cx - 3, 5, 7, 3, '#5e4026'); p.rect(cx - 2, 4, 5, 1, '#6e4e30');
+      p.rect(cx - 3, 7, 7, 1, c[1]);
+    } else if (f === 2) {
+      p.rect(cx - 4, 5, 9, 3, '#f4f0e4'); p.rect(cx - 4, 5, 2, 3, '#ffffff'); p.rect(cx - 4, 8, 9, 1, '#24407a');
+      p.rect(cx - 1, 3, 3, 2, c[1]);                                    // borla
+    } else if (f === 3) {
+      p.rect(cx - 5, 8, 11, 1, '#2a4e26'); p.rect(cx - 3, 5, 6, 3, '#3f7a36'); p.rect(cx - 2, 4, 4, 1, '#4f8a42');
+      p.rect(cx - 3, 7, 6, 1, c[2]);
+      p.line(cx - 3, 6, cx - 6, 1, '#e8d8a8'); p.set(cx - 5, 2, '#c84a2a');  // pluma
+    } else if (f === 4) {
+      const HOOD = ['#9a8a74', '#76685a', '#56493d'];
+      p.ellipse(cx - 1, 9, 4.9, 4.4, null, (u, v) => (v > 0.3 && u > -0.25 ? null : u < -0.2 ? HOOD[2] : HOOD[1]));
+      p.set(cx + 1, 5, HOOD[0]); p.set(cx, 5, HOOD[0]); p.rect(cx - 6, 11, 2, 5, HOOD[2]);
+    } else if (f === 5) {
+      p.ellipse(cx, 7.4, 5.4, 2, null, (u, v) => (v < -0.1 ? '#3c3c48' : '#24242c'));
+      p.set(cx, 5, '#24242c');                                          // el rabito de la txapela
+    }
+  }
+
+  function miliciano(color, f) {
     const c = shades(color), p = new Pix(28, 36);
     shadow(p, 14, 33, 8);
     // lanza detrás del brazo
@@ -59,8 +87,9 @@
     p.rect(11, 15, 6, 2, c[0]);                                       // hombros
     p.rect(18, 18, 3, 3, SKIN[0]); p.set(20, 19, SKIN[1]);            // mano en la lanza
     head(p, 14, 11);
-    // gorro de cuero
-    p.rect(10, 6, 8, 3, LEATHER[1]); p.rect(11, 5, 6, 1, LEATHER[0]); p.rect(9, 9, 10, 1, LEATHER[2]);
+    // gorro de cuero (o el de su facción)
+    if (f === undefined) { p.rect(10, 6, 8, 3, LEATHER[1]); p.rect(11, 5, 6, 1, LEATHER[0]); p.rect(9, 9, 10, 1, LEATHER[2]); }
+    else factionHat(p, 14, f, c);
     // escudo redondo con el color de la facción
     p.ellipse(9, 21, 5, 5.5, null, (u, v) => {
       const r2 = u * u + v * v;
@@ -135,7 +164,7 @@
   }
 
   // Colono: lleva un hatillo a la espalda y un bastón con el estandarte para fundar la ciudad.
-  function colono(color) {
+  function colono(color, f) {
     const c = shades(color), p = new Pix(28, 36);
     shadow(p, 14, 33, 8);
     // hatillo grande a la espalda
@@ -150,8 +179,9 @@
     p.rect(10, 22, 8, 1, LEATHER[2]);
     p.rect(18, 18, 3, 3, SKIN[0]); p.set(20, 19, SKIN[1]);
     head(p, 14, 11);
-    // sombrero de paja de ala ancha
-    p.rect(9, 8, 11, 1, '#c59c48'); p.rect(11, 5, 7, 3, '#e2c070'); p.rect(11, 7, 7, 1, '#8a6a2c');
+    // sombrero de paja de ala ancha (o el de su facción)
+    if (f === undefined) { p.rect(9, 8, 11, 1, '#c59c48'); p.rect(11, 5, 7, 3, '#e2c070'); p.rect(11, 7, 7, 1, '#8a6a2c'); }
+    else factionHat(p, 14, f, c);
     outline(p);
     return p.done();
   }
@@ -311,7 +341,7 @@
   }
 
   // Mercader: con mula cargada de fardos, sombrero de ala y bolsa de monedas.
-  function mercader(color) {
+  function mercader(color, f) {
     const c = shades(color), p = new Pix(28, 36);
     shadow(p, 14, 33, 10);
     // fardo grande a la espalda, atado con cuerdas
@@ -326,9 +356,9 @@
     p.ellipse(21, 24, 2.6, 2.6, null, (u, v) => (u + v < -0.3 ? '#e8c060' : '#b08a30'));
     p.set(21, 21, LEATHER[2]); p.set(20, 24, '#fff2a8');
     head(p, 14, 11);
-    // sombrero de fieltro con pluma
-    p.rect(9, 8, 11, 1, '#3e2a1a'); p.rect(11, 5, 7, 3, '#5a3c24'); p.rect(11, 7, 7, 1, c[1]);
-    p.line(16, 5, 19, 1, '#f4efe0');
+    // sombrero de fieltro con pluma (o el de su facción)
+    if (f === undefined) { p.rect(9, 8, 11, 1, '#3e2a1a'); p.rect(11, 5, 7, 3, '#5a3c24'); p.rect(11, 7, 7, 1, c[1]); p.line(16, 5, 19, 1, '#f4efe0'); }
+    else factionHat(p, 14, f, c);
     outline(p);
     return p.done();
   }
@@ -509,8 +539,128 @@
     return p.done();
   }
 
-  const DRAW = { colono, miliciano, arquero, jinete, espadachin, lancero, caballero, canon, catapulta, monje, mercader, barca, carabela, galeon, lamia, gigante, dragon };
-  function makeUnitCanvas(type, color) { return DRAW[type](color); }
+  // --- Tropas propias de cada facción -------------------------------------------
+  // Arcabucero (Hondarribia): morrión, coraza y arcabuz largo apoyado en la horquilla.
+  function arcabucero(color) {
+    const c = shades(color), p = new Pix(30, 36);
+    shadow(p, 14, 33, 8);
+    p.line(24, 18, 24, 32, WOOD[2]); p.set(23, 17, WOOD[1]); p.set(25, 17, WOOD[1]); // horquilla
+    legs(p, 11, 25, ['#a33a3a', '#7e2a2a', '#5a1e1e']);
+    body(p, 10, 16, 8, 10, c);
+    p.rect(11, 16, 6, 5, STEEL[1]); p.rect(11, 16, 2, 5, STEEL[0]); p.rect(16, 16, 1, 5, STEEL[2]); // coraza
+    p.rect(10, 22, 8, 1, LEATHER[2]);
+    p.rect(9, 19, 2, 4, '#f4e9c9'); p.set(9, 23, '#d8b04a');               // bandolera con cargas
+    head(p, 14, 11);
+    factionHat(p, 14, 0, c);
+    // arcabuz: culata de madera en el hombro, cañón largo
+    p.line(13, 17, 20, 17, WOOD[0]); p.line(13, 18, 19, 18, WOOD[2]);
+    p.line(20, 16, 29, 16, STEEL[2]); p.line(20, 17, 28, 17, STEEL[1]);
+    p.rect(18, 18, 3, 2, SKIN[0]);
+    p.set(16, 19, '#e05a3a');                                               // mecha encendida
+    outline(p);
+    return p.done();
+  }
+  // Contrabandista (Irun): sombrero de ala, capa oscura, saco del botín y puñal.
+  function contrabandista(color) {
+    const c = shades(color), p = new Pix(28, 36);
+    const CAPE = ['#5a5266', '#423a4e', '#2c2636'];
+    shadow(p, 14, 33, 8);
+    p.ellipse(7, 18, 4.5, 5, null, (u, v) => (u + v < -0.4 ? '#c8a868' : u + v > 0.5 ? '#7a6038' : '#a88a52')); // saco
+    p.set(7, 13, LEATHER[2]); p.set(6, 18, '#f5cf3a'); p.set(8, 20, '#f5cf3a');                                // asoman monedas
+    legs(p, 11, 25, ['#5a4a3a', '#46382c', '#30261e']);
+    for (let y = 15; y < 29; y++) { const w = 4 + Math.floor((y - 15) / 3); for (let x = 0; x < w; x++) p.set(14 - x, y, x === w - 1 ? CAPE[2] : CAPE[1]); } // capa por detrás
+    body(p, 11, 16, 7, 10, c);
+    p.rect(11, 16, 7, 2, CAPE[0]);
+    p.rect(11, 22, 7, 1, LEATHER[2]);
+    p.rect(18, 19, 3, 3, SKIN[0]);
+    p.line(21, 18, 24, 15, STEEL[0]); p.set(20, 20, '#d8b04a');              // puñal
+    head(p, 14, 11);
+    p.rect(12, 12, 5, 2, c[2]);                                              // pañuelo tapando la boca
+    factionHat(p, 14, 1, c);
+    outline(p);
+    return p.done();
+  }
+  // Galeote (Donosti): galera larga y baja con remos y vela latina del color de la facción.
+  function galeote(color) {
+    const c = shades(color), p = new Pix(44, 38);
+    p.line(20, 3, 20, 24, WOOD[2]);
+    for (let j = 0; j < 17; j++) for (let i = 0; i <= Math.floor(j * 0.85); i++) p.set(21 + i, 5 + j, i === 0 ? c[0] : (j > 6 && j < 10) ? '#f4f0e4' : i >= Math.floor(j * 0.85) - 1 ? c[2] : c[1]);
+    p.line(14, 2, 38, 22, WOOD[1]);                                          // entena
+    p.rect(19, 0, 4, 2, c[1]);
+    hull(p, 2, 41, 24, 6, c[1]);
+    p.rect(3, 20, 7, 4, HULL[1]); p.rect(3, 20, 7, 1, HULL[0]);              // popa
+    for (let x = 8; x <= 34; x += 4) { p.line(x, 28, x - 3, 34, WOOD[0]); p.set(x - 3, 34, WOOD[2]); } // remos
+    p.line(41, 26, 44, 27, STEEL[1]);                                         // espolón
+    water(p, 22, 34, 20);
+    outline(p);
+    return p.done();
+  }
+  // Cazador de dragones (Lekumberri): sombrero con pluma, ballesta grande y collar de colmillos.
+  function cazador(color) {
+    const c = shades(color), p = new Pix(30, 36);
+    shadow(p, 13, 33, 8);
+    p.rect(6, 13, 3, 9, LEATHER[1]); p.rect(6, 13, 1, 9, LEATHER[0]); p.set(7, 11, STEEL[0]); p.set(6, 12, STEEL[1]); // virotes
+    legs(p, 10, 25, ['#6b5a3a', '#56462e', '#3e3222']);
+    body(p, 9, 16, 8, 10, ['#7a9a4a', '#5e7e38', '#46602a', '#344820']);
+    p.rect(9, 16, 8, 2, c[1]);
+    for (let x = 10; x < 16; x += 2) p.set(x, 18, '#f4f0e0');               // colmillos
+    p.rect(9, 22, 8, 1, LEATHER[2]);
+    head(p, 13, 11);
+    factionHat(p, 13, 3, c);
+    // ballesta: tablero horizontal y arco vertical delante
+    p.line(15, 18, 27, 18, WOOD[1]); p.line(15, 19, 24, 19, WOOD[2]);
+    p.line(26, 13, 26, 23, STEEL[1]); p.set(27, 13, STEEL[2]); p.set(27, 23, STEEL[2]);
+    p.line(25, 13, 22, 18, '#efe6cf'); p.line(22, 18, 25, 23, '#efe6cf');
+    p.rect(16, 19, 3, 2, SKIN[0]);
+    outline(p);
+    return p.done();
+  }
+  // Guardián de las cuevas (Alli): capucha de piedra, escudo de roca y antorcha.
+  function guardian(color) {
+    const c = shades(color), p = new Pix(30, 36);
+    const ROCK = ['#b5b2a8', '#8e8b81', '#6a675e', '#4c4a43'];
+    shadow(p, 14, 33, 9);
+    p.line(22, 8, 22, 26, WOOD[1]); p.line(23, 9, 23, 26, WOOD[2]);         // antorcha
+    p.ellipse(22.5, 6, 2.2, 3.2, null, (u, v) => (v < -0.3 ? '#fff2a8' : u > 0.2 ? '#e05a3a' : '#f5a83a'));
+    legs(p, 11, 25, ROCK);
+    body(p, 10, 16, 9, 10, [ROCK[0], ROCK[1], ROCK[2], ROCK[3]]);
+    p.rect(11, 16, 7, 2, c[1]); p.rect(10, 22, 9, 1, c[2]);
+    p.rect(19, 18, 3, 3, SKIN[0]);
+    head(p, 14, 11);
+    factionHat(p, 14, 4, c);
+    // escudo de roca grande
+    p.ellipse(8, 21, 6, 7, null, (u, v) => {
+      const r2 = u * u + v * v;
+      if (r2 > 0.8) return ROCK[3];
+      return u + v < -0.4 ? ROCK[0] : u + v > 0.5 ? ROCK[2] : ROCK[1];
+    });
+    p.line(5, 17, 9, 22, ROCK[3]); p.line(9, 22, 7, 26, ROCK[3]);           // grietas
+    p.rect(7, 19, 3, 3, c[1]);                                              // marca de la facción
+    outline(p);
+    return p.done();
+  }
+  // Aizkolari (Leitza): txapela, camisa blanca con faja, hacha enorme al hombro y un tronco.
+  function aizkolari(color) {
+    const c = shades(color), p = new Pix(30, 36);
+    shadow(p, 14, 33, 10);
+    p.rect(3, 28, 12, 4, '#9a6a3a'); p.rect(3, 28, 12, 1, '#c08a52'); p.ellipse(15, 30, 1.6, 2, null, () => '#e8c890'); p.set(15, 30, '#b08a5a'); // tronco
+    legs(p, 12, 25, ['#e8e4d8', '#c8c4b8', '#a8a498']);
+    body(p, 11, 16, 8, 10, ['#ffffff', '#ece8dc', '#c8c4b8', '#a8a498']);
+    p.rect(11, 21, 8, 3, c[1]); p.rect(11, 21, 8, 1, c[0]);                  // faja (gerriko)
+    p.rect(19, 17, 3, 3, SKIN[0]); p.rect(9, 17, 2, 3, SKIN[0]);
+    head(p, 15, 11);
+    factionHat(p, 15, 5, c);
+    // hacha: mango largo cruzado y hoja grande arriba
+    p.line(8, 22, 23, 5, WOOD[0]); p.line(9, 22, 24, 5, WOOD[2]);
+    for (let j = 0; j < 8; j++) for (let i = 0; i < 4 + Math.floor(j / 2); i++) p.set(22 + i, j, i > 2 + Math.floor(j / 2) ? STEEL[2] : j < 2 ? STEEL[0] : STEEL[1]);
+    outline(p);
+    return p.done();
+  }
+
+  const DRAW = { colono, miliciano, arquero, jinete, espadachin, lancero, caballero, canon, catapulta, monje, mercader, barca, carabela, galeon, lamia, gigante, dragon,
+    arcabucero, contrabandista, galeote, cazador, guardian, aizkolari };
+  // f = número de la facción (para su sombrero); si no se da, el dibujo de siempre.
+  function makeUnitCanvas(type, color, f) { return DRAW[type](color, f); }
 
   root.PEUnits = { makeUnitCanvas, TYPES: Object.keys(DRAW) };
 })(this);

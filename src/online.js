@@ -286,6 +286,7 @@
       <p class="small">Mapa ${M.SIZES[s.size].label.toLowerCase()} · ${M.MAP_TYPES[s.type].label} · ${M.ABUNDANCE[s.abundance].label} · Turnos de ${limitText(s.limit)}</p>
       <ul class="seats" id="net-seats"></ul>
       <label>Tu facción<select id="net-faction"></select></label>
+      <div id="net-finfo"></div>
       <p class="small" id="net-wait"></p>
       <div class="row"><button id="net-back">Mis partidas</button><button id="net-start" class="main" hidden>Empezar</button></div>`);
     $('net-invite').onclick = () => invite(doc.code);
@@ -310,6 +311,7 @@
     $('net-seats').innerHTML = doc.seats.map(s => `<li><span class="dot" style="background:${F().colors[s.faction]}"></span>
       <b>${esc(s.name)}</b> · ${F().names[s.faction]}${s.uid === doc.host ? ' (crea la partida)' : ''}</li>`).join('');
     const sel = $('net-faction');
+    if ($('net-finfo') && $('net-finfo').dataset.f !== String(mine) && F().card) { $('net-finfo').innerHTML = F().card(mine); $('net-finfo').dataset.f = String(mine); }
     if (document.activeElement !== sel) {
       sel.innerHTML = F().names.map((n, f) => `<option value="${f}"${f === mine ? ' selected' : ''}${used.includes(f) && f !== mine ? ' disabled' : ''}>${n}</option>`).join('');
     }

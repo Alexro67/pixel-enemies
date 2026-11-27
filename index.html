@@ -86,6 +86,26 @@
   #net-toast{position:fixed;z-index:30;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom));
     background:#120c18;border:2px solid #f4e9c9;padding:8px 12px;font-size:13px;max-width:85vw;text-align:center;}
   #net-toast[hidden]{display:none;}
+  #turn{cursor:pointer;}
+  /* Partida nueva y facciones */
+  #setup{position:fixed;inset:0;z-index:18;overflow-y:auto;background:#1a1224;padding:calc(16px + env(safe-area-inset-top)) 16px 24px;}
+  #setup[hidden]{display:none;}
+  #setup-box{max-width:420px;margin:0 auto;background:#2b1d3a;border:3px solid #120c18;box-shadow:inset -3px -3px 0 #1d1428,inset 3px 3px 0 #4a3563;padding:18px 16px;}
+  #setup h2{font-size:22px;margin:0 0 12px;text-align:center;text-shadow:2px 2px 0 #000;}
+  #setup h3{font-size:16px;margin:16px 0 8px;}
+  #setup p{font-size:14px;line-height:1.4;margin:0 0 10px;}
+  #setup .small{font-size:12px;opacity:.85;}
+  #setup .row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px 0;}
+  #setup .row button{font-size:15px;padding:9px 13px;}
+  #setup button.main{background:#2f7a3a;box-shadow:inset -2px -2px 0 #1d4f25,inset 2px 2px 0 #4fa85c;font-weight:bold;}
+  #setup label{display:block;font-size:13px;margin:0 0 8px;}
+  #setup label select{display:block;width:100%;margin-top:3px;font-size:15px;padding:6px;}
+  .fcard{border:3px solid;background:#221830;padding:8px 10px;margin:0 0 8px;font-size:13px;line-height:1.4;}
+  .fcard img{image-rendering:pixelated;flex:none;}
+  .fhead{display:flex;align-items:center;gap:8px;font-size:16px;margin-bottom:4px;}
+  .fhead img{width:30px;height:45px;}
+  .funit{display:flex;gap:8px;align-items:center;margin-top:6px;}
+  .funit img{height:54px;width:auto;}
   /* Tecnologías */
   #techs{background:#2f5a6a;box-shadow:inset -2px -2px 0 #1d3a45,inset 2px 2px 0 #4f8a9a;font-weight:bold;}
   #tech{position:fixed;inset:0;z-index:15;overflow-y:auto;background:rgba(26,18,36,.96);padding:calc(12px + env(safe-area-inset-top)) 10px 20px;}
@@ -139,6 +159,7 @@
   <div id="actions" hidden></div>
 </div>
 <div id="tech" hidden><div id="tech-box"></div></div>
+<div id="setup" hidden></div>
 <div id="overlay" hidden>
   <div id="ov-box">
     <h2 id="ov-title"></h2>

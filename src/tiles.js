@@ -540,7 +540,7 @@
 
   // --- Ciudades ------------------------------------------------------------------
   // Tamaño según el nivel: 1-2 aldea, 3-4 villa con empalizada, 5-7 ciudad con torre.
-  function makeCityCanvas(color, size, capital, fort) {
+  function makeCityCanvas(color, size, capital, fort, kind) {
     const p = new Pix(TW, TH), oy = TOP;
     const [r, g, b] = hex2rgb(color);
     const roof = [[Math.min(255, r + 60), Math.min(255, g + 60), Math.min(255, b + 60)], [r, g, b], [r * 0.6, g * 0.6, b * 0.6].map(Math.round)];
@@ -598,7 +598,9 @@
     // bandera de la facción (más alta en la capital, con corona)
     const fx = size === 3 ? 28 : 26, fy = size === 3 ? oy + 9 : oy + 14, fh = capital ? 22 : 16;
     p.rect(fx, fy - fh, 1, fh, '#3b2414');
-    for (let y = 0; y < 6; y++) for (let x = 0; x < 9; x++) p.set(fx + 1 + x, fy - fh + y + Math.round(Math.sin(x / 2) * 0.7), y < 1 ? roof[0] : y > 4 ? roof[2] : roof[1]);
+    const bw = kind ? 10 : 9, bh = kind ? 8 : 6, wave = (x) => Math.round(Math.sin(x / 2) * 0.7);
+    for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) p.set(fx + 1 + x, fy - fh + y + wave(x), y < 1 ? roof[0] : y > bh - 2 ? roof[2] : roof[1]);
+    if (kind) emblem(p, fx + 3, fy - fh + 1, kind, color, (i) => wave(i + 2));
     if (capital) { p.rect(fx - 2, fy - fh - 3, 5, 2, '#f5cf3a'); p.set(fx - 2, fy - fh - 4, '#f5cf3a'); p.set(fx, fy - fh - 4, '#fff2a8'); p.set(fx + 2, fy - fh - 4, '#f5cf3a'); }
     return p.done();
   }
@@ -800,7 +802,28 @@
     return p.done();
   }
 
-  function makeFlagCanvas(color) {
+  // Escudos de las facciones: dibujos de 7x6 píxeles (X = color claro).
+  const EMBLEMS = {
+    castillo: ['X.X.X.X', 'XXXXXXX', '.XXXXX.', '.XX.XX.', '.XX.XX.', '.XXXXX.'],
+    puente:   ['.......', 'XXXXXXX', 'XXXXXXX', 'X.X.X.X', 'X.....X', 'X.....X'],
+    concha:   ['..XXX..', '.XX.XX.', 'X.X.X.X', 'X.X.X.X', '.XXXXX.', '...X...'],
+    pino:     ['...X...', '..XXX..', '.XXXXX.', '..XXX..', 'XXXXXXX', '...X...'],
+    cueva:    ['...X...', '..XXX..', '.XXXXX.', 'XXX.XXX', 'XX...XX', 'XX...XX'],
+    hacha:    ['.XXX...', 'XXXXX..', 'XXXX...', '.XXX.X.', '.....X.', '......X'],
+  };
+  function emblemColor(color) {
+    const [r, g, b] = hex2rgb(color);
+    return 0.3 * r + 0.59 * g + 0.11 * b > 165 ? '#3a2410' : '#fff4d6';
+  }
+  // Pinta el escudo con su esquina de arriba a la izquierda en (x, y); dy(x) = ondulación de la tela.
+  function emblem(p, x, y, kind, color, dy) {
+    const rows = EMBLEMS[kind];
+    if (!rows) return;
+    const ink = emblemColor(color);
+    rows.forEach((line, j) => line.split('').forEach((ch, i) => { if (ch === 'X') p.set(x + i, y + j + (dy ? dy(i) : 0), ink); }));
+  }
+
+  function makeFlagCanvas(color, kind) {
     const p = new Pix(20, 30);
     const [r, g, b] = hex2rgb(color);
     const light = [Math.min(255, r + 50), Math.min(255, g + 50), Math.min(255, b + 50)];
@@ -814,6 +837,7 @@
       if (x > 9 && (y < 3 || y > 8)) continue;
       p.set(5 + x, 3 + y + wave, c);
     }
+    if (kind) emblem(p, 8, 6, kind, color, (i) => Math.round(Math.sin(((i + 3) / 13) * Math.PI * 1.5) * 1.5));
     return p.done();
   }
 
