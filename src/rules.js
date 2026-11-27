@@ -542,11 +542,36 @@
       || (u.type === 'colono' && !foundProblem(game, map, u));
   }
 
+  // --- Órdenes ------------------------------------------------------------
+  // Cada cosa que hace un jugador se puede escribir como una orden pequeña, por ejemplo
+  // { a: 'move', u: 7, col: 3, row: 5 }. Así, en las partidas online se guardan las órdenes
+  // de cada turno y los demás las ven repetirse en su móvil (no hay azar: sale igual).
+  function unitById(game, id) { return game.units.find(u => u.id === id) || null; }
+  function perform(game, map, o) {
+    const u = o.u !== undefined ? unitById(game, o.u) : null;
+    const city = o.city !== undefined ? cityById(game, o.city) : null;
+    const t = o.col !== undefined ? M.tileAt(map, o.col, o.row) : null;
+    switch (o.a) {
+      case 'move': return u && move(game, map, u, o.col, o.row);
+      case 'attack': { const d = unitById(game, o.t); return u && d && attack(game, map, u, d); }
+      case 'found': return u && found(game, map, u);
+      case 'build': return t && build(game, map, t);
+      case 'road': return t && buildRoad(game, map, t);
+      case 'nivel': return city && levelUp(game, map, city);
+      case 'ampliar': return city && expand(game, map, city);
+      case 'fortificar': return city && fortify(game, map, city);
+      case 'recruit': return city && recruit(game, map, city, o.type);
+      case 'heal': return u && heal(game, map, u);
+      case 'end': endTurn(game, map); return true;
+      default: return null;
+    }
+  }
+
   // Al cargar una partida guardada: quita del mapa los recursos que se perdieron al fundar ciudades.
   function applyCleared(game, map) {
     for (const k of Object.keys(game.cleared || {})) { const [c, r] = k.split(',').map(Number); const t = M.tileAt(map, c, r); if (t) t.resource = null; }
   }
-  const api = { applyCleared, UNITS, SKILLS, CLASSES, TECH_TERRAIN, ARMIES, GROUND, ECON, BUILDINGS, RECRUITABLE, has, visionOf, newGame, unitAt, reachable, targets, preview, move, attack,
+  const api = { applyCleared, perform, unitById, UNITS, SKILLS, CLASSES, TECH_TERRAIN, ARMIES, GROUND, ECON, BUILDINGS, RECRUITABLE, has, visionOf, newGame, unitAt, reachable, targets, preview, move, attack,
     endTurn, defenseOf, terrainDef, weak, canDoSomething, key,
     cityAt, cityById, ownerOfTile, cityTiles, cityLevel, cityIncome, playerIncome, cityUnits, cityCapacity,
     foundProblem, found, buildOption, build, buildingFor, recruitProblem, recruit, healProblem, healAmount, heal,

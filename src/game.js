@@ -17,6 +17,8 @@
     fog: false,
     map: null,
     game: null,
+    me: null,      // en partidas online: qué jugador eres tú (null = todos en el mismo móvil)
+    orders: [],    // órdenes hechas en este turno
   };
   window.PEState = state; // para pruebas desde la consola
   function localGet(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }
@@ -48,6 +50,11 @@
         this.fitCamera();
       });
       window.PEGame = this;
+      if (window.PEOnline && window.PEOnline.boot()) return; // enlace de partida online
+      this.startLocal();
+    }
+    // Partida en un solo móvil: la guardada, o una nueva.
+    startLocal() {
       const asked = new URLSearchParams(location.search).get('mapa');
       const saved = loadGame();
       if (saved && (!asked || asked === saved.seed)) this.startGame(saved);
@@ -89,18 +96,26 @@
     // --- Partida -------------------------------------------------------------
     // saved: { seed, size, type, abundance, armies, game } o solo { seed } para una nueva.
     startGame(saved) {
-      if (saved.game) {
+      const online = !!saved.online;
+      state.me = online ? saved.me : null;
+      state.names = online ? saved.names : null;
+      state.orders = saved.orders || [];
+      document.body.classList.toggle('online', online);
+      if (online) state.fog = true; // en online la niebla va siempre puesta
+      const players = saved.players || PLAYERS;
+      if (saved.game || online) {
         state.size = saved.size; state.type = saved.type; state.abundance = saved.abundance; state.armies = ({ cerca: 'prueba', lejos: 'real' })[saved.armies] || saved.armies;
       }
-      const map = M.generate({ seed: saved.seed, size: state.size, type: state.type, abundance: state.abundance, players: PLAYERS.length });
+      const map = M.generate({ seed: saved.seed, size: state.size, type: state.type, abundance: state.abundance, players: players.length });
       state.map = map;
-      state.game = saved.game || R.newGame({ map, players: PLAYERS, close: state.armies === 'prueba', army: state.armies });
+      state.game = saved.game || R.newGame({ map, players, close: state.armies === 'prueba', army: state.armies });
       R.applyCleared(state.game, map);
       this.drawMap();
       this.drawUnits();
       this.applyFog();
       this.fitCamera();
       ui.onMap(map);
+      if (online) { if (state.game.winner !== null) ui.showWinner(); return; }
       saveGame();
       if (state.game.winner !== null) ui.showWinner();
       else ui.showHandover(!saved.game);
@@ -252,8 +267,9 @@
     }
     applyFog() {
       const map = state.map, game = state.game;
-      const mine = game.units.filter(u => u.owner === game.turn);
-      const myCities = game.cities.filter(c => c.owner === game.turn);
+      const me = state.me === null ? game.turn : state.me; // en online, ves lo tuyo aunque no sea tu turno
+      const mine = game.units.filter(u => u.owner === me);
+      const myCities = game.cities.filter(c => c.owner === me);
       map.tiles.forEach((t, i) => {
         const hidden = state.fog && !mine.some(u => M.distance(t.col, t.row, u.col, u.row) <= R.visionOf(map, u))
           && !myCities.some(c => M.distance(t.col, t.row, c.col, c.row) <= R.ECON.cityVision);
@@ -318,7 +334,8 @@
       this.busy = true;
       this.clearHighlights();
       this.selectTile(null);
-      const path = R.move(state.game, state.map, u, dest.col, dest.row);
+      const path = this.order({ a: 'move', u: u.id, col: dest.col, row: dest.row });
+      if (!path) { this.busy = false; return; }
       const v = this.unitViews.get(u.id);
       for (const step of path) {
         const p = this.unitPos(step.col, step.row);
@@ -332,6 +349,7 @@
       this.applyFog();
       saveGame();
       this.busy = false;
+      if (this.replaying) { ui.say(`${unitName(u)} se mueve.`); return; }
       // Si después de moverse puede atacar, se queda seleccionada.
       if (R.targets(state.game, u).some(e => !this.isHidden(e.col, e.row))) this.selectUnit(u);
       else { this.selectUnit(null); ui.say(`${R.UNITS[u.type].label} se ha movido.`); }
@@ -343,7 +361,8 @@
       this.selectTile(null);
       const ranged = R.UNITS[att.type].range > 1 && M.distance(att.col, att.row, def.col, def.row) > 1;
       const counterRanged = R.UNITS[def.type].range > 1 && M.distance(att.col, att.row, def.col, def.row) > 1;
-      const result = R.attack(state.game, state.map, att, def);
+      const result = this.order({ a: 'attack', u: att.id, t: def.id });
+      if (!result) { this.busy = false; return; }
       const va = this.unitViews.get(att.id), vd = this.unitViews.get(def.id);
       va.img.setFlipX(vd.x < va.x);
       await this.strike(va, vd, ranged, result.dealt);
@@ -358,14 +377,14 @@
       saveGame();
       this.busy = false;
       // Un hostigador que aún no se ha movido puede irse después de atacar.
-      const canLeave = att.hp > 0 && state.game.winner === null && R.reachable(state.game, state.map, att).size > 0;
+      const canLeave = !this.replaying && att.hp > 0 && state.game.winner === null && R.reachable(state.game, state.map, att).size > 0;
       this.selectUnit(canLeave ? att : null);
       let msg = `${unitName(att)} ataca al ${unitName(def)} y le quita ${result.dealt}.`;
       if (result.kills) msg += ' ¡Lo elimina!';
       else if (result.back) msg += ` Contraataque: le devuelve ${result.back}` + (result.dies ? ' y lo elimina.' : '.');
       if (canLeave) msg += ' Aún puede moverse.';
       ui.say(msg);
-      if (state.game.winner !== null) ui.showWinner();
+      if (state.game.winner !== null && !this.replaying) ui.showWinner();
     }
     // Un golpe: el atacante se lanza (o dispara una flecha) y sale el daño flotando.
     async strike(from, to, ranged, dmg) {
@@ -392,8 +411,13 @@
     wait(ms) { return new Promise(res => this.time.delayedCall(ms, res)); }
 
     endTurn() {
-      if (this.busy || state.game.winner !== null) return;
-      R.endTurn(state.game, state.map);
+      if (this.busy || state.game.winner !== null || !this.myTurn()) return;
+      this.order({ a: 'end' });
+      if (state.me !== null) { // online: se manda el turno y los demás lo verán
+        this.selectUnit(null); this.drawUnits(); this.applyFog(); ui.onTurn();
+        window.PEOnline.endTurn();
+        return;
+      }
       this.selectUnit(null);
       this.drawUnits(); // las tropas de un jugador eliminado desaparecen
       this.applyFog();
@@ -406,13 +430,14 @@
     doFound(u) {
       const problem = R.foundProblem(state.game, state.map, u);
       if (problem) { ui.say(`Aquí no se puede fundar: ${problem}`); return; }
-      const city = R.found(state.game, state.map, u);
+      const city = this.order({ a: 'found', u: u.id });
+      if (!city) return;
       this.drawUnits(); this.applyFog(); saveGame(); ui.refreshRes();
       this.showTile(M.tileAt(state.map, city.col, city.row));
       ui.say(`¡Nueva ciudad: ${cityName(city)}! Su territorio son las casillas de alrededor que no eran de nadie.`);
     }
     doBuild(t) {
-      const type = R.build(state.game, state.map, t);
+      const type = this.order({ a: 'build', col: t.col, row: t.row });
       if (!type) return;
       this.applyFog(); saveGame(); ui.refreshRes();
       this.showTile(t);
@@ -421,7 +446,7 @@
       ui.say(`${b.label} construido: ${R.givesText(R.buildingGives(state.game, state.map, t))} por turno.` + (can ? ` ${cityName(city)} ya puede subir de nivel.` : ''));
     }
     doRoad(t) {
-      if (!R.buildRoad(state.game, state.map, t)) return;
+      if (!this.order({ a: 'road', col: t.col, row: t.row })) return;
       this.applyFog(); saveGame(); ui.refreshRes();
       this.showTile(t);
       const n = R.connectedCities(state.game, state.map, state.game.turn).length;
@@ -429,7 +454,7 @@
     }
     doCity(city, what) {
       const g = state.game, map = state.map;
-      const ok = what === 'nivel' ? R.levelUp(g, map, city) : what === 'ampliar' ? R.expand(g, map, city) : R.fortify(g, map, city);
+      const ok = this.order({ a: what, city: city.id });
       if (!ok) return;
       this.applyFog(); saveGame(); ui.refreshRes();
       this.showTile(M.tileAt(map, city.col, city.row));
@@ -438,18 +463,65 @@
         : `${cityName(city)} está fortificada: quien la defienda tendrá +${R.ECON.fortDefense} de defensa.`);
     }
     doRecruit(city, type) {
-      const u = R.recruit(state.game, state.map, city, type);
+      const u = this.order({ a: 'recruit', city: city.id, type });
       if (!u) return;
       this.drawUnits(); this.applyFog(); saveGame(); ui.refreshRes();
       this.selectUnit(null);
       ui.say(`${R.UNITS[type].label} reclutado en ${cityName(city)}. Podrá moverse en tu próximo turno.`);
     }
     doHeal(u) {
-      const n = R.heal(state.game, state.map, u);
+      const n = this.order({ a: 'heal', u: u.id });
       if (!n) return;
       this.refreshUnit(u); saveGame(); ui.refreshRes();
       this.selectUnit(null);
       ui.say(`${unitName(u)} se cura ${n} de vida (ahora tiene ${u.hp}).`);
+    }
+    // Hace una orden (ver R.perform) y la apunta en las órdenes de este turno.
+    order(o) {
+      const r = R.perform(state.game, state.map, o);
+      if (r && !this.replaying) { state.orders.push(o); if (window.PEOnline) window.PEOnline.onOrder(o); }
+      return r;
+    }
+    // ¿Puede tocar cosas el que tiene el móvil? (en online, solo en tu turno)
+    myTurn() { return !this.replaying && (state.me === null || state.game.turn === state.me); }
+    // Repite lo que hizo otro jugador: desde la partida como estaba, con sus órdenes,
+    // moviendo la cámara a cada cosa que pasa (si la ves; con niebla, lo oculto no se enseña).
+    async replay(start, orders, speed) {
+      this.replaying = true; this.busy = true; this.skip = false;
+      let seen = 0; // cuántas cosas se han visto (las que pasan en la niebla no se enseñan)
+      ui.setActions([]);
+      state.game = JSON.parse(JSON.stringify(start));
+      R.applyCleared(state.game, state.map);
+      this.drawMap(); this.drawUnits(); this.applyFog();
+      for (const o of orders) {
+        if (this.skip) break;
+        const g = state.game, u = o.u !== undefined ? R.unitById(g, o.u) : null, c = o.city !== undefined ? R.cityById(g, o.city) : null;
+        const at = o.col !== undefined && o.a !== 'move' ? o : u || c;
+        if (at && !this.isHidden(at.col, at.row)) { seen++; await this.panTo(at.col, at.row); await this.wait(250 / (speed || 1)); }
+        this.busy = false;
+        if (o.a === 'move' && u) await this.doMove(u, { col: o.col, row: o.row });
+        else if (o.a === 'attack' && u) await this.doAttack(u, R.unitById(g, o.t));
+        else if (o.a === 'found' && u) this.doFound(u);
+        else if (o.a === 'build') this.doBuild(M.tileAt(state.map, o.col, o.row));
+        else if (o.a === 'road') this.doRoad(M.tileAt(state.map, o.col, o.row));
+        else if (o.a === 'recruit' && c) this.doRecruit(c, o.type);
+        else if (o.a === 'heal' && u) this.doHeal(u);
+        else if (c) this.doCity(c, o.a);
+        else if (o.a === 'end') R.perform(state.game, state.map, o);
+        this.busy = true;
+        if (at && !this.isHidden(at.col, at.row)) await this.wait(550 / (speed || 1));
+      }
+      this.selectUnit(null); this.selectTile(null);
+      this.replaying = false; this.busy = false;
+      this.drawUnits(); this.applyFog();
+      return seen;
+    }
+    panTo(col, row) {
+      const p = this.unitPos(col, row), cam = this.cameras.main;
+      const zoom = Phaser.Math.Clamp(Math.max(cam.zoom, 1.3 * DPR), this.minZoom, this.maxZoom);
+      const shift = (ui.topHeight() - ui.bottomHeight()) * DPR / 2 / zoom;
+      return this.tween({ targets: cam, zoom, scrollX: p.x - cam.width / 2, scrollY: p.y - 20 - shift - cam.height / 2,
+        duration: 420, ease: 'Sine.easeInOut' });
     }
     showTile(t) {
       this.selectUnit(null);
@@ -576,7 +648,7 @@
       const tile = this.tileUnder(w);
       const touched = this.unitUnder(w) || (tile && R.unitAt(game, tile.col, tile.row));
       const sel = this.selected;
-      if (sel && sel.owner === game.turn) {
+      if (sel && sel.owner === game.turn && this.myTurn()) {
         if (touched && this.targets.includes(touched)) return this.doAttack(sel, touched);
         const dest = tile && this.moves.get(R.key(tile.col, tile.row));
         if (dest && !(touched && touched.owner !== game.turn)) return this.doMove(sel, dest);
@@ -592,6 +664,7 @@
 
   // --- Guardado en el propio móvil -----------------------------------------
   function saveGame() {
+    if (state.me !== null || (window.PEGame && window.PEGame.replaying)) return; // las online se guardan en el servidor
     const m = state.map;
     localSet(SAVE_KEY, JSON.stringify({ seed: m.seed, size: state.size, type: state.type, abundance: state.abundance,
       armies: state.armies, game: state.game }));
@@ -614,21 +687,24 @@
       $('armies').value = state.armies;
       $('fog').classList.toggle('on', state.fog);
       ui.onTurn();
-      try { history.replaceState(null, '', `?mapa=${map.seed}`); } catch (e) { /* nada */ }
+      if (state.me === null) try { history.replaceState(null, '', `?mapa=${map.seed}`); } catch (e) { /* nada */ }
     },
     onTurn() {
       const g = state.game, f = factionOf(g.turn);
       const chip = $('turn');
-      chip.textContent = `Ronda ${g.round} · ${FACTION_NAMES[f]}`;
+      chip.textContent = `Ronda ${g.round} · ${FACTION_NAMES[f]}` + (state.names ? ` (${state.names[g.turn]})` : '');
       chip.style.background = FACTION_COLORS[f];
       chip.style.color = f === 1 ? '#2b1d3a' : '#fff';
       ui.refreshRes();
       ui.setActions([]);
-      ui.say('Toca una tropa para moverla, o una ciudad para reclutar.');
+      if (state.me !== null && g.turn !== state.me && g.winner === null)
+        ui.say(`Le toca a ${state.names[g.turn]} (${FACTION_NAMES[f]}). Puedes mirar el mapa mientras tanto.`);
+      else ui.say('Toca una tropa para moverla, o una ciudad para reclutar.');
+      $('end').disabled = state.me !== null && g.turn !== state.me;
     },
     // Oro y comida del jugador que juega, y lo que cobra cada turno.
     refreshRes() {
-      const g = state.game, p = g.players[g.turn], inc = R.playerIncome(g, state.map, g.turn);
+      const g = state.game, who = state.me === null ? g.turn : state.me, p = g.players[who], inc = R.playerIncome(g, state.map, who);
       $('gold').textContent = `Oro ${p.gold} (+${inc.oro})`;
       $('food').textContent = `Comida ${p.food} (+${inc.comida})`;
     },
@@ -636,6 +712,7 @@
     // Botones de acción: [{ label, onClick, disabled, main }]
     setActions(list) {
       const box = $('actions');
+      if (!window.PEGame || !window.PEGame.myTurn()) list = []; // no es tu turno (o se está repitiendo el de otro)
       box.innerHTML = '';
       box.hidden = !list.length;
       for (const a of list) {
@@ -777,10 +854,12 @@
     },
     showWinner() {
       const g = state.game;
-      if (g.winner < 0) { ui.overlay('Empate', 'No queda ninguna ciudad en pie.', 'Nueva partida', '#8a7a9a', () => newGame()); return; }
+      const online = state.me !== null, again = online ? () => window.PEOnline.showList() : () => newGame();
+      const label = online ? 'Volver a mis partidas' : 'Nueva partida';
+      if (g.winner < 0) { ui.overlay('Empate', 'No queda ninguna ciudad en pie.', label, '#8a7a9a', again); return; }
       const f = factionOf(g.winner);
-      ui.overlay(`¡Gana ${FACTION_NAMES[f]}!`, `Ha conquistado todas las ciudades enemigas en ${g.round} rondas.`,
-        'Nueva partida', FACTION_COLORS[f], () => newGame(), true);
+      ui.overlay(`¡Gana ${FACTION_NAMES[f]}${online ? ` (${state.names[g.winner]})` : ''}!`, `Ha conquistado todas las ciudades enemigas en ${g.round} rondas.`,
+        label, FACTION_COLORS[f], again, true);
     },
     // Ventana encima del mapa. opts: { cancel: 'texto', onCancel, input: 'valor inicial', keepMap }
     overlay(title, text, button, color, onClose, keepMap, opts = {}) {
@@ -848,6 +927,8 @@
     $('armies').add(new Option('Real: 1 miliciano', 'real'));
   }
 
+  window.PEUI = ui;
+  window.PEFactions = { names: FACTION_NAMES, colors: FACTION_COLORS };
   window.addEventListener('load', () => {
     wireUi();
     new Phaser.Game({
