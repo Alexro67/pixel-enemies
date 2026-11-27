@@ -134,7 +134,29 @@
     return p.done();
   }
 
-  const DRAW = { miliciano, arquero, jinete };
+  // Colono: lleva un hatillo a la espalda y un bastón con el estandarte para fundar la ciudad.
+  function colono(color) {
+    const c = shades(color), p = new Pix(28, 36);
+    shadow(p, 14, 33, 8);
+    // hatillo grande a la espalda
+    p.ellipse(8, 17, 4.5, 5.5, null, (u, v) => (u + v < -0.4 ? '#d8c08a' : u + v > 0.5 ? '#8f7444' : '#b89b62'));
+    p.rect(6, 12, 5, 1, LEATHER[2]); p.set(8, 21, LEATHER[2]);
+    // bastón con estandarte
+    p.line(21, 3, 21, 32, WOOD[1]); p.line(22, 4, 22, 31, WOOD[2]);
+    for (let y = 0; y < 6; y++) for (let x = 0; x < 5; x++) p.set(22 + x, 3 + y, y === 0 ? c[0] : y > 4 ? c[2] : c[1]);
+    legs(p, 11, 25, ['#7a6a52', '#655640', '#4d412f']);
+    body(p, 10, 16, 8, 10, ['#cdbb94', '#b3a07a', '#8a7858', '#6a5a40']);
+    p.rect(10, 16, 8, 2, c[1]); // pañuelo con el color de la facción
+    p.rect(10, 22, 8, 1, LEATHER[2]);
+    p.rect(18, 18, 3, 3, SKIN[0]); p.set(20, 19, SKIN[1]);
+    head(p, 14, 11);
+    // sombrero de paja de ala ancha
+    p.rect(9, 8, 11, 1, '#c59c48'); p.rect(11, 5, 7, 3, '#e2c070'); p.rect(11, 7, 7, 1, '#8a6a2c');
+    outline(p);
+    return p.done();
+  }
+
+  const DRAW = { colono, miliciano, arquero, jinete };
   function makeUnitCanvas(type, color) { return DRAW[type](color); }
 
   root.PEUnits = { makeUnitCanvas, TYPES: Object.keys(DRAW) };

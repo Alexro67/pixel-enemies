@@ -206,7 +206,7 @@
     p.rect(x, y + 2 + h, w + 2, 1, '#4c4a43'); // sombra
     p.set(x + 1, y + 4, '#d4d0c4');
   }
-  // Cantera (edificio que construirá el jugador; aún no se usa en el mapa): una roca grande natural a la que le han cortado un trozo en bloques rectos
+  // Cantera (la construye el jugador en una montaña sin mineral): una roca grande natural a la que le han cortado un trozo en bloques rectos
   // (se ve la piedra clara recién cortada), con una grúa de madera y bloques apilados.
   function quarry(p, oy, onMountain) {
     const base = oy + 32, h = onMountain ? 1.7 : 1;
@@ -302,8 +302,211 @@
     spots.sort((a, b) => a.y - b.y).forEach(t => (t.kind === 'pine' ? pine : roundTree)(p, t.x, TOP + t.y, t.s));
   }
 
+
+  // --- Edificios que construye el jugador -------------------------------------
+  // Casita vista de frente con tejado a dos aguas. roof = [claro, medio, oscuro].
+  function house(p, x, y, w, h, roof, wall) { // (x, y) = esquina de abajo a la izquierda del muro
+    wall = wall || ['#efe2c0', '#d6c49a', '#a8946a'];
+    shadowSoft(p, x + w / 2 + 2, y + 1, w / 2 + 3, 2);
+    p.rect(x, y - h, w, h, wall[0]);
+    p.rect(x + w - 2, y - h, 2, h, wall[1]);
+    p.rect(x, y - 1, w, 1, wall[2]);
+    // puerta y ventana
+    p.rect(x + 1 + Math.floor(w / 2) - 1, y - 4, 2, 4, '#5b3a1f');
+    if (w >= 7) p.rect(x + 1, y - h + 2, 2, 2, '#3a2a40');
+    // tejado
+    const rh = Math.ceil(w / 2) + 1;
+    for (let j = 0; j < rh; j++) {
+      const half = Math.round((w / 2 + 1) * (j + 1) / rh);
+      for (let i = -half; i <= half; i++) {
+        const xx = Math.round(x + w / 2 + i - 0.5);
+        p.set(xx, y - h - rh + j, j === rh - 1 ? roof[2] : i < 0 ? roof[0] : roof[1]);
+      }
+    }
+  }
+  const THATCH = ['#e2c070', '#c59c48', '#8a6a2c'];
+  const WOODROOF = ['#a8703c', '#86552a', '#5e3a1a'];
+
+  function plowedField(p, oy) {
+    // surcos arados con trigo en filas, y una cerca de madera
+    for (let y = 8; y < H - 6; y++) for (let x = 6; x < W - 6; x++) {
+      if (edgeDist(x, y) < 5) continue;
+      const row = Math.floor((y + x * 0.25) / 3) % 2;
+      p.set(x, oy + y, row ? C.furrow : (x + y) % 3 ? C.wheat : C.wheatD);
+    }
+    for (let y = 9; y < H - 6; y += 6) for (let x = 8; x < W - 8; x += 3) {
+      if (edgeDist(x, y) < 6) continue;
+      const yy = Math.round(y + x * 0.25) % (H - 4);
+      p.set(x, oy + yy - 1, C.wheatHi); p.set(x, oy + yy - 2, C.wheat);
+    }
+    // espantapájaros
+    p.rect(40, oy + 14, 1, 10, C.woodD); p.rect(37, oy + 17, 7, 1, C.wood);
+    p.rect(39, oy + 12, 3, 3, '#e8d6a0'); p.rect(38, oy + 11, 5, 1, '#8a5a2b');
+    p.rect(39, oy + 15, 3, 4, '#b0402f');
+    house(p, 10, oy + 22, 7, 5, THATCH);
+  }
+  function hunterHut(p, oy) {
+    house(p, 22, oy + 30, 10, 7, WOODROOF, ['#a8763f', '#86592c', '#5e3c1c']);
+    // cuernos encima de la puerta
+    p.line(26, oy + 18, 24, oy + 15, '#efe4c8'); p.line(28, oy + 18, 30, oy + 15, '#efe4c8');
+    p.set(23, oy + 15, '#efe4c8'); p.set(31, oy + 15, '#efe4c8');
+    // piel secándose en un bastidor
+    p.rect(36, oy + 22, 1, 10, C.woodD); p.rect(44, oy + 22, 1, 10, C.woodD); p.rect(36, oy + 22, 9, 1, C.wood);
+    p.rect(37, oy + 23, 7, 6, '#b07a48'); p.rect(38, oy + 24, 5, 4, '#c99566');
+    // arco apoyado
+    for (let y = 0; y < 9; y++) p.set(18 + Math.round(Math.sin(y / 8 * Math.PI) * 2), oy + 24 + y, C.wood);
+    p.line(18, oy + 24, 18, oy + 32, '#efe6cf');
+  }
+  function sawmill(p, oy) {
+    house(p, 30, oy + 26, 12, 7, WOODROOF, ['#b98a55', '#946a3a', '#6a4a26']);
+    // troncos apilados (vistos por el corte)
+    const logs = [[10, 34], [15, 34], [20, 34], [12.5, 30], [17.5, 30], [15, 26]];
+    logs.forEach(([x, y]) => p.ellipse(x, oy + y, 2.6, 2.6, null, (u, v) => (u * u + v * v < 0.25 ? C.woodHi : u * u + v * v < 0.7 ? C.ring : C.woodD)));
+    // caballete con sierra
+    p.line(34, oy + 40, 37, oy + 33, C.woodD); p.line(40, oy + 40, 37, oy + 33, C.woodD);
+    p.rect(30, oy + 33, 14, 2, C.wood); p.rect(30, oy + 33, 14, 1, C.woodHi);
+    p.rect(42, oy + 30, 6, 1, '#c9ced6'); p.rect(48, oy + 29, 2, 3, C.woodD);
+  }
+  function mineEntrance(p, cx, base) {
+    // boca de la mina con marco de madera, y una vagoneta con mineral
+    p.ellipse(cx, base - 4, 6, 7, null, (u, v) => (v > 0.55 ? null : '#1a1418'));
+    p.rect(cx - 7, base - 10, 2, 10, C.wood); p.rect(cx + 5, base - 10, 2, 10, C.woodD);
+    p.rect(cx - 8, base - 12, 16, 2, C.wood); p.rect(cx - 8, base - 12, 16, 1, C.woodHi);
+    p.rect(cx - 4, base + 2, 2, 8, '#6a5a4a'); p.rect(cx + 2, base + 2, 2, 8, '#6a5a4a'); // raíles
+    for (let k = 0; k < 4; k++) p.rect(cx - 5, base + 3 + k * 2, 10, 1, C.woodD);
+    const vy = base + 8;
+    p.rect(cx + 8, vy - 4, 9, 4, '#5c5f66'); p.rect(cx + 8, vy - 4, 9, 1, '#8c9098');
+    p.set(cx + 10, vy - 5, C.gold); p.set(cx + 12, vy - 6, C.goldHi); p.set(cx + 14, vy - 5, C.gold); p.set(cx + 11, vy - 5, '#7d7a71');
+    p.rect(cx + 9, vy, 2, 2, '#2a2a2a'); p.rect(cx + 14, vy, 2, 2, '#2a2a2a');
+  }
+  function pier(p, w, river) {
+    // muelle de tablas que sale de la orilla y una barca amarrada
+    const x0 = river ? 14 : 8, y0 = river ? 30 : 26;
+    for (let k = 0; k < 6; k++) { p.rect(x0 + k * 3, w + y0, 2, 9, k % 2 ? C.wood : C.woodHi); p.rect(x0 + k * 3, w + y0 + 9, 2, 3, C.woodD); }
+    p.rect(x0 + 1, w + y0 + 9, 16, 1, C.woodD);
+    const bx = x0 + 22, by = w + y0 + 6;
+    p.rect(bx, by, 12, 3, '#8a5a2b'); p.rect(bx + 1, by + 3, 10, 2, '#5e3c1c'); p.rect(bx, by, 12, 1, C.woodHi);
+    p.rect(bx + 5, by - 9, 1, 9, C.woodD); p.rect(bx + 6, by - 8, 5, 5, '#efe6cf'); p.rect(bx + 6, by - 4, 4, 1, '#d4c9a8');
+    p.line(x0 + 17, w + y0 + 2, bx, by + 1, '#d9c79a'); // cuerda
+    // red de pesca
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) p.set(x0 + 2 + i * 2, w + y0 - 3 + j * 2, '#c9c0a0');
+  }
+
+  // --- Ciudades ------------------------------------------------------------------
+  // Tamaño según el nivel: 1-2 aldea, 3-4 villa con empalizada, 5-7 ciudad con torre.
+  function makeCityCanvas(color, size, capital, fort) {
+    const p = new Pix(TW, TH), oy = TOP;
+    const [r, g, b] = hex2rgb(color);
+    const roof = [[Math.min(255, r + 60), Math.min(255, g + 60), Math.min(255, b + 60)], [r, g, b], [r * 0.6, g * 0.6, b * 0.6].map(Math.round)];
+    // plaza de tierra
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const d = edgeDist(x, y);
+      if (d >= 5) p.set(x, oy + y, (x * 3 + y * 5) % 7 === 0 ? '#b89a66' : (x + y) % 2 ? '#cdb07a' : '#c4a670');
+    }
+    const houses = size === 1
+      ? [[12, 26, 9, 6], [30, 22, 10, 7], [22, 38, 9, 6]]
+      : size === 2
+        ? [[8, 24, 8, 6], [22, 20, 9, 7], [36, 24, 8, 6], [12, 38, 9, 6], [32, 40, 9, 6]]
+        : [[6, 26, 8, 6], [38, 26, 8, 6], [8, 40, 9, 6], [36, 42, 9, 6], [20, 44, 8, 5]];
+    if (size === 3) {
+      // castillo en el centro: torre con almenas
+      const tx = 22, ty = oy + 34;
+      shadowSoft(p, tx + 8, ty + 1, 12, 3);
+      p.rect(tx, ty - 22, 12, 22, '#c9c3b4'); p.rect(tx + 9, ty - 22, 3, 22, '#9e988a');
+      for (let k = 0; k < 4; k++) p.rect(tx + k * 3, ty - 25, 2, 3, k === 3 ? '#9e988a' : '#c9c3b4');
+      p.rect(tx + 4, ty - 6, 4, 6, '#3a2a20'); p.rect(tx + 3, ty - 15, 2, 3, '#2a2030'); p.rect(tx + 7, ty - 15, 2, 3, '#2a2030');
+      for (let k = 0; k < 22; k += 4) p.rect(tx, ty - 22 + k, 9, 1, '#b4ae9f');
+    }
+    houses.sort((a, b) => a[1] - b[1]).forEach(([x, y, w, h]) => house(p, x, oy + y, w, h, roof));
+    if (fort) {
+      // fortificación: muralla de piedra con almenas por delante y dos torres en las esquinas
+      const wallY = (x) => H - 5 - Math.abs(x + 0.5 - W / 2) * (H / 4) / (W / 2) * 0.9;
+      for (let x = 5; x < W - 5; x++) {
+        const y = Math.round(wallY(x));
+        if (edgeDist(x, y) < 2) continue;
+        const top = oy + y - 8;
+        for (let j = 0; j < 8; j++) p.set(x, top + j, j === 0 ? '#e6e1d4' : (x + Math.floor((j + (x >> 2)) / 3)) % 7 === 0 ? '#8f897b' : '#bdb6a6');
+        p.set(x, top + 8, '#55524a');
+        if (x % 4 < 2) { p.set(x, top - 1, '#d4cfc0'); p.set(x, top - 2, '#e6e1d4'); }
+      }
+      for (const tx of [7, W - 13]) {
+        const y = Math.round(wallY(tx + 3)), top = oy + y - 15;
+        p.rect(tx, top, 7, 15, '#c9c3b4'); p.rect(tx + 5, top, 2, 15, '#9e988a');
+        for (let k = 0; k < 4; k++) p.rect(tx + k * 2, top - 2, 1, 2, '#d8d2c4');
+        p.rect(tx + 2, top + 4, 2, 3, '#2a2030');
+      }
+      // puerta
+      const gy = oy + Math.round(wallY(W / 2));
+      p.rect(W / 2 - 3, gy - 7, 6, 7, '#3a2a20'); p.rect(W / 2 - 3, gy - 8, 6, 1, '#8f897b');
+    } else if (size >= 2) {
+      // empalizada (o muralla de piedra en las grandes) por delante
+      for (let x = 4; x < W - 4; x += 3) {
+        const y = H - 6 - Math.abs(x + 1.5 - W / 2) * (H / 4) / (W / 2) * 0.9;
+        if (edgeDist(x, Math.round(y)) < 2) continue;
+        const stone = size === 3;
+        p.rect(x, oy + Math.round(y) - 6, 2, 6, stone ? '#b4ae9f' : C.wood);
+        p.set(x, oy + Math.round(y) - 7, stone ? '#d8d2c4' : C.woodHi);
+        p.set(x + 1, oy + Math.round(y) - 6, stone ? '#8a8577' : C.woodD);
+      }
+    }
+    // bandera de la facción (más alta en la capital, con corona)
+    const fx = size === 3 ? 28 : 26, fy = size === 3 ? oy + 9 : oy + 14, fh = capital ? 22 : 16;
+    p.rect(fx, fy - fh, 1, fh, '#3b2414');
+    for (let y = 0; y < 6; y++) for (let x = 0; x < 9; x++) p.set(fx + 1 + x, fy - fh + y + Math.round(Math.sin(x / 2) * 0.7), y < 1 ? roof[0] : y > 4 ? roof[2] : roof[1]);
+    if (capital) { p.rect(fx - 2, fy - fh - 3, 5, 2, '#f5cf3a'); p.set(fx - 2, fy - fh - 4, '#f5cf3a'); p.set(fx, fy - fh - 4, '#fff2a8'); p.set(fx + 2, fy - fh - 4, '#f5cf3a'); }
+    return p.done();
+  }
+
+
+  // Territorio: un velo suave del color de la facción y una raya en los lados que dan fuera (mask: bits E, O, NO, NE, SO, SE).
+  function makeBorderCanvas(color, mask) {
+    const p = new Pix(TW, TH);
+    const [r, g, b] = hex2rgb(color), dark = [r * 0.45, g * 0.45, b * 0.45].map(Math.round);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (!insideHex(x, y)) continue;
+      const ds = sideDists(x, y);
+      let near = 99;
+      ds.forEach((d, i) => { if (mask & (1 << i)) near = Math.min(near, d); });
+      if (near < 1.6) p.set(x, TOP + y, dark, 200);
+      else if (near < 4.2) p.set(x, TOP + y, [r, g, b], 235);
+      else if (near < 6) p.set(x, TOP + y, [r, g, b], 70);
+      else if ((x + y) % 4 === 0) p.set(x, TOP + y, [r, g, b], 40);
+    }
+    return p.done();
+  }
+
+  // Camino de tierra desde el centro hacia los lados que tocan otro camino o ciudad (mask: E, O, NO, NE, SO, SE).
+  // En un río se dibuja como un puente de tablas.
+  function makeRoadCanvas(mask, bridge, drop) {
+    const p = new Pix(TW, TH), oy = TOP + (drop || 0);
+    const ends = [[W - 2, H / 2], [2, H / 2], [W / 4 + 1, H / 8 + 1], [W * 3 / 4 - 1, H / 8 + 1], [W / 4 + 1, H * 7 / 8 - 1], [W * 3 / 4 - 1, H * 7 / 8 - 1]];
+    const cx = W / 2, cy = H / 2;
+    const segs = ends.filter((e, i) => mask & (1 << i));
+    const near = (x, y) => {
+      let best = Math.hypot(x - cx, y - cy) * (segs.length ? 1.6 : 0.8);
+      for (const [ex, ey] of segs) {
+        const vx = ex - cx, vy = ey - cy, t = Math.max(0, Math.min(1, ((x - cx) * vx + (y - cy) * vy) / (vx * vx + vy * vy)));
+        best = Math.min(best, Math.hypot(x - cx - vx * t, y - cy - vy * t));
+      }
+      return best;
+    };
+    const rr = makeRng(mask * 31 + 7);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (!insideHex(x, y)) continue;
+      const d = near(x + 0.5, y + 0.5);
+      if (bridge) {
+        if (d < 4.5) p.set(x, oy + y, d > 3.6 ? C.woodD : (Math.round(x * 0.9 + y * 0.5) % 3 === 0 ? C.woodD : C.wood));
+        else if (d < 5.5) p.set(x, oy + y, '#3a2614', 160);
+      } else if (d < 3.4) {
+        const v = rr();
+        p.set(x, oy + y, v < 0.12 ? '#a8885a' : v < 0.2 ? '#d8c08e' : d > 2.5 ? '#b0905e' : '#c6a774');
+      } else if (d < 4.4) p.set(x, oy + y, '#6a7a3a', 140);
+    }
+    return p.done();
+  }
+
   // --- Casilla completa -----------------------------------------------------
-  function makeTerrainCanvas(terrain, resource, variant, open) {
+  function makeTerrainCanvas(terrain, resource, variant, open, building) {
     const p = new Pix(TW, TH);
     const r = makeRng(variant * 7919 + terrain.length * 131 + (resource ? resource.length * 17 : 0) + 3);
     const oy = TOP;
@@ -316,7 +519,7 @@
         const x = Math.floor(r() * W), y = Math.floor(r() * H);
         if (edgeDist(x, y) === 2) p.set(x, w + y, C.foam);
       }
-      if (resource === 'pesca') { fishShadows(p, w, r); fish(p, 28 + Math.floor(r() * 6) - 3, w + 22); }
+      if (resource === 'pesca') { fishShadows(p, w, r); if (building) pier(p, w, false); else fish(p, 28 + Math.floor(r() * 6) - 3, w + 22); }
       return p.done();
     }
 
@@ -349,7 +552,7 @@
         if (bankDist(x, y) !== 3) continue;
         p.set(x, oy + y, C.reed); p.set(x, oy + y - 1, C.reed); p.set(x, oy + y - 2, '#6aa83f');
       }
-      if (resource === 'pesca') fish(p, 28, oy + 24);
+      if (resource === 'pesca') { if (building) pier(p, oy, true); else fish(p, 28, oy + 24); }
       return p.done();
     }
 
@@ -357,7 +560,9 @@
       side(p, C.dirt);
       face(p, oy, C.grass, r, C.grassEdge);
       grassTufts(p, oy, r, 10);
-      if (resource === 'trigo') {
+      if (building) {
+        plowedField(p, oy);
+      } else if (resource === 'trigo') {
         wildWheat(p, oy, r);
       } else {
         flowers(p, oy, r, 6);
@@ -369,7 +574,13 @@
     if (terrain === 'bosque') {
       side(p, C.dirt);
       face(p, oy, C.forestFloor, r, '#4b7f2e');
-      if (resource === 'caza') {
+      if (resource === 'caza' && building) {
+        forest(p, r, 5, (x, y) => Math.abs(x - 30) < 18 && Math.abs(y - 26) < 12);
+        hunterHut(p, oy);
+      } else if (resource === 'lena' && building) {
+        [[14, 18], [44, 20]].forEach(([x, y]) => roundTree(p, x, oy + y, 1.4));
+        sawmill(p, oy);
+      } else if (resource === 'caza') {
         forest(p, r, 5, (x, y) => Math.abs(x - 28) < 12 && Math.abs(y - 28) < 8);
         deer(p, 27, oy + 33);
       } else if (resource === 'lena') {
@@ -387,12 +598,14 @@
     if (terrain === 'montana') {
       side(p, C.stoneSide);
       face(p, oy, C.rockGround, r, '#7d875a');
+      if (building === 'cantera') { quarry(p, oy, true); return p.done(); }
       const cx = 30 + Math.floor(r() * 4) - 2, base = oy + 34, top = oy - 30 + Math.floor(r() * 6);
       mountain(p, cx - 15, oy + 26, oy - 8, 11, false); // montañita de atrás
       mountain(p, cx, base, top, 20, true);
       if (resource === 'mineral') {
         goldVeins(p, cx, base, top, 20, r);
-        oreRock(p, cx - 9, base + 6); oreRock(p, cx + 12, base + 8);
+        if (building) mineEntrance(p, cx - 4, base + 2);
+        else { oreRock(p, cx - 9, base + 6); oreRock(p, cx + 12, base + 8); }
       } else {
         grassTufts(p, oy, r, 4, '#6f7a48');
       }
@@ -458,6 +671,6 @@
 
   root.PETiles = {
     W, H, TW, TH, TOP, SIDE, WATER_DROP, ROW_STEP, COL_STEP, VARIANTS,
-    makeTerrainCanvas, makeFogCanvas, makeOutlineCanvas, makeFlagCanvas, makeFillCanvas, tileOrigin, insideHex, edgeDist, Pix, hex2rgb,
+    makeTerrainCanvas, makeCityCanvas, makeBorderCanvas, makeRoadCanvas, makeFogCanvas, makeOutlineCanvas, makeFlagCanvas, makeFillCanvas, tileOrigin, insideHex, edgeDist, Pix, hex2rgb,
   };
 })(this);
