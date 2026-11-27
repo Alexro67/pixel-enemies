@@ -449,6 +449,36 @@
     p.rect(x + w / 2 - 1, y - 26, 2, 3, '#f5cf3a'); // llama dorada
   }
 
+  // Molino: torre de piedra con tejado cónico y aspas de madera.
+  function windmill(p, oy) {
+    const cx = 28, y = oy + 36;
+    shadowSoft(p, cx + 2, y + 1, 10, 3);
+    for (let j = 0; j < 18; j++) { const half = 5 + Math.floor(j / 6); p.rect(cx - half, y - 18 + j, half * 2, 1, j % 4 === 0 ? '#c8bca4' : '#e2d8c2'); p.rect(cx + half - 2, y - 18 + j, 2, 1, '#b0a48c'); }
+    p.rect(cx - 2, y - 6, 4, 6, '#5a3c24');                                     // puerta
+    for (let j = 0; j < 7; j++) p.rect(cx - j - 1, y - 25 + j, j * 2 + 2, 1, j > 4 ? '#8a3020' : '#b8503a'); // tejado
+    // aspas en cruz
+    const hx = cx, hy = y - 19;
+    p.line(hx - 11, hy - 11, hx + 11, hy + 11, '#6a4424'); p.line(hx - 11, hy + 11, hx + 11, hy - 11, '#6a4424');
+    for (let k = 3; k < 11; k++) { p.set(hx - k + 1, hy - k, '#f4ecd8'); p.set(hx + k - 1, hy + k, '#f4ecd8'); p.set(hx - k, hy + k - 1, '#f4ecd8'); p.set(hx + k, hy - k + 1, '#f4ecd8'); }
+    p.rect(hx - 1, hy - 1, 2, 2, '#3a2414');
+  }
+
+  // Santuario de las leyendas: círculo de piedras antiguas con un arco y una llama mágica morada.
+  function sanctuary(p, oy) {
+    const cx = 28, y = oy + 34;
+    shadowSoft(p, cx + 2, y + 2, 20, 3);
+    p.ellipse(cx, y - 2, 19, 5, null, (u, v) => (v < 0 ? '#b8b0c8' : '#8a8298'));       // suelo de losas
+    p.ellipse(cx, y - 2, 13, 3, null, () => '#6a5a8a');
+    const stones = [[-17, 0], [-12, -4], [12, -4], [17, 0], [-9, 3], [9, 3]];
+    for (const [dx, dy] of stones) { p.rect(cx + dx - 1, y + dy - 10, 3, 10, '#d0c8d8'); p.rect(cx + dx + 1, y + dy - 10, 1, 10, '#8a8298'); p.rect(cx + dx - 1, y + dy - 11, 3, 1, '#ece6f2'); }
+    // arco central
+    p.rect(cx - 7, y - 20, 3, 18, '#e2dcea'); p.rect(cx + 4, y - 20, 3, 18, '#b0a8c0');
+    p.rect(cx - 8, y - 23, 16, 3, '#ece6f2'); p.rect(cx - 8, y - 21, 16, 1, '#9a92aa');
+    // llama mágica
+    p.ellipse(cx, y - 9, 3, 5, null, (u, v) => (u * u + v * v < 0.3 ? '#f4e0ff' : '#b070f0'));
+    p.set(cx, y - 15, '#d8a8ff'); p.set(cx - 2, y - 17, '#c890ff'); p.set(cx + 2, y - 18, '#e8c8ff');
+  }
+
   // --- Murallas y torres --------------------------------------------------------
   // Muralla: tramos de piedra desde el centro hacia los lados que tocan otra muralla o torre (mask: E, O, NO, NE, SO, SE).
   function makeWallCanvas(color, mask, damaged, gate) {
@@ -681,6 +711,8 @@
       if (building === 'mercado') market(p, oy);
       else if (building === 'taller') workshop(p, oy);
       else if (building === 'templo') temple(p, oy);
+      else if (building === 'santuario') sanctuary(p, oy);
+      else if (building === 'molino') windmill(p, oy);
       else if (building) {
         plowedField(p, oy);
       } else if (resource === 'trigo') {

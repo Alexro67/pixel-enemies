@@ -280,8 +280,9 @@
           const hp = this.add.text(11, -33, '', { fontFamily: 'monospace', fontStyle: 'bold', fontSize: '11px',
             color: '#ffffff', stroke: '#1a1420', strokeThickness: 3 }).setResolution(6).setOrigin(0.5, 0.5);
           const ring = this.add.ellipse(0, -2, 26, 9).setStrokeStyle(2, Phaser.Display.Color.HexStringToColor(FACTION_COLORS[factionOf(u.owner)]).color, 0.95);
-          v.add([ring, img, hp]);
-          v.img = img; v.hp = hp;
+          const charm = this.add.text(-12, -36, '💫', { fontSize: '11px' }).setResolution(6).setOrigin(0.5, 0.5).setVisible(false);
+          v.add([ring, img, hp, charm]);
+          v.img = img; v.hp = hp; v.charm = charm;
           if (R.isShip(u)) { // cuántas tropas lleva a bordo
             v.cargo = this.add.text(-14, -30, '', { fontFamily: 'monospace', fontStyle: 'bold', fontSize: '10px', color: '#ffffff',
               backgroundColor: '#3a2a1a', padding: { x: 2, y: 0 } }).setResolution(6).setOrigin(0.5, 0.5);
@@ -303,6 +304,7 @@
       if (u.aboard) { const p = this.unitPos(u.col, u.row); v.setPosition(p.x, p.y).setVisible(false); return; }
       if (v.cargo) { const n = R.passengers(game, u).length; v.cargo.setText(n ? `👤${n}` : '').setVisible(n > 0); }
       v.hp.setText(String(u.hp));
+      if (v.charm) v.charm.setVisible(!!u.charmed); // encantada por una lamia
       v.hp.setColor(R.weak(u) ? '#ff7a6a' : u.hp < R.UNITS[u.type].hp ? '#ffe08a' : '#ffffff');
       // Las tropas del jugador que ya no pueden hacer nada se ven apagadas.
       const tired = u.owner === game.turn && !R.canDoSomething(game, state.map, u);
@@ -374,7 +376,7 @@
           const o = T.tileOrigin(e.col, e.row), pv = R.preview(game, map, u, e);
           const img = this.add.image(o.x, this.tileY(M.tileAt(map, e.col, e.row)), 'hl_attack').setOrigin(0, 0).setDepth(e.row + 0.5);
           // Cuánto le quitarías (y cuánto te devolvería), antes de atacar.
-          const txt = this.add.text(o.x + T.W / 2 - 14, o.y + T.TOP + T.H - 12, `-${pv.dealt}` + (pv.back ? ` ↩${pv.back}` : ''),
+          const txt = this.add.text(o.x + T.W / 2 - 14, o.y + T.TOP + T.H - 12, `-${pv.dealt}` + (pv.back ? ` ↩${pv.back}` : '') + (pv.burns.length ? ` 🔥${pv.burns.length}` : ''),
             { fontFamily: 'monospace', fontStyle: 'bold', fontSize: '10px', color: '#ffe0d8', stroke: '#5a0d08', strokeThickness: 3 })
             .setResolution(6).setOrigin(0.5, 0.5).setDepth(e.row + 0.9);
           this.layer.add([img, txt]); this.hlLayer.push(img, txt);
@@ -434,12 +436,16 @@
       if (!result) { this.busy = false; return; }
       const va = this.unitViews.get(att.id), vd = this.unitViews.get(def.id);
       va.img.setFlipX(vd.x < va.x);
+      const burnViews = (result.burns || []).map(b => ({ b, v: this.unitViews.get(b.id) })).filter(x => x.v);
       await this.strike(va, vd, ranged, result.dealt);
+      // Fuego del dragón: también quema a los de al lado.
+      if (burnViews.length) await Promise.all(burnViews.map(({ b, v }) => this.burn(va, v, b.dealt)));
       if (result.back > 0) {
         vd.img.setFlipX(va.x < vd.x);
         await this.strike(vd, va, counterRanged, result.back);
       }
-      const dead = [[def, vd], [att, va]].filter(([u]) => u.hp <= 0);
+      const dead = [[def, vd], [att, va]].filter(([u]) => u.hp <= 0)
+        .concat(burnViews.filter(({ b }) => !R.unitById(state.game, b.id)).map(({ v }) => [{ hp: 0 }, v]));
       await Promise.all(dead.map(([, v]) => this.tween({ targets: v, alpha: 0, y: v.y + 6, duration: 380 })));
       this.drawUnits();
       this.refreshAll();
@@ -453,6 +459,8 @@
       if (result.kills) msg += R.isShip(def) ? ' ¡Lo hunde!' : ' ¡Lo elimina!';
       if (result.drowned) msg += ` Se hunden con él ${result.drowned} tropa${result.drowned > 1 ? 's' : ''} que llevaba.`;
       else if (result.back) msg += ` Contraataque: le devuelve ${result.back}` + (result.dies ? ' y lo elimina.' : '.');
+      if (burnViews.length) msg += ` Su fuego quema a ${burnViews.length} tropa${burnViews.length > 1 ? 's' : ''} más` + (result.burned ? ` y elimina a ${result.burned}.` : '.');
+      if (result.charms && def.hp > 0) msg += ` ¡Lo encanta: no podrá moverse en su próximo turno!`;
       if (canLeave) msg += ' Aún puede moverse.';
       if (again) msg += ' ¡Implacable: puede volver a atacar!';
       ui.say(msg);
@@ -479,6 +487,23 @@
       this.layer.add(t);
       this.tween({ targets: t, y: t.y - 16, alpha: 0, delay: 350, duration: 500 }).then(() => t.destroy());
       await this.wait(260);
+    }
+    // Llamarada: bolas de fuego desde el dragón hasta la tropa, y sale el daño.
+    async burn(from, to, dmg) {
+      const n = 5, flames = [];
+      for (let k = 0; k < n; k++) {
+        const f = this.add.circle(from.x + 10, from.y - 24, 4 - k * 0.4, k % 2 ? 0xffd040 : 0xff6a20).setDepth(9999);
+        this.layer.add(f); flames.push(f);
+      }
+      await Promise.all(flames.map((f, k) => this.tween({ targets: f, x: to.x + (k - 2) * 3, y: to.y - 14 + (k % 3) * 3, alpha: 0.4, delay: k * 30, duration: 240 })));
+      flames.forEach(f => f.destroy());
+      to.img.setTint(0xff8a40);
+      this.time.delayedCall(220, () => to.img.clearTint());
+      const t = this.add.text(to.x, to.y - 40, `-${dmg}🔥`, { fontFamily: 'monospace', fontStyle: 'bold', fontSize: '13px',
+        color: '#ffb040', stroke: '#1a0a08', strokeThickness: 4 }).setResolution(6).setOrigin(0.5).setDepth(9999);
+      this.layer.add(t);
+      this.tween({ targets: t, y: t.y - 16, alpha: 0, delay: 350, duration: 500 }).then(() => t.destroy());
+      await this.wait(200);
     }
     unitTypeOf(view) { for (const [id, v] of this.unitViews) if (v === view) { const u = R.unitById(state.game, id); return u && u.type; } return null; }
     tween(cfg) { return new Promise(res => this.tweens.add({ ...cfg, onComplete: () => res() })); }
@@ -932,6 +957,7 @@
       txt += ` · Ve a ${R.visionOf(map, u)}`;
       txt += ` · ${R.CLASSES[s.cls].label}` + s.skills.map(k => ` · ${R.SKILLS[k].label}: ${R.SKILLS[k].text}`).join('');
       if (R.weak(u)) txt += ' · Herido: pega 1 menos';
+      if (u.charmed) txt += ' · Encantada por una lamia: este turno no puede moverse';
       if (s.sea) txt += ` · Navega por ${s.sea.map(k => M.TERRAIN[k].label.toLowerCase()).join(' y ')}` + (s.carry ? ` · Lleva ${s.carry} tropa${s.carry > 1 ? 's' : ''}` : ' · No lleva tropas');
       const ship = R.shipOf(g, u), crew = R.isShip(u) ? R.passengers(g, u) : [];
       if (ship) txt = `A bordo de ${R.UNITS[ship.type].label.toLowerCase()}` + (u.owner === g.turn ? (u.moved ? ': podrá bajar a tierra en tu próximo turno' : ': toca una casilla azul de tierra para bajar') : '') + ` · ${txt}`;
@@ -1027,7 +1053,9 @@
         }
         const first = shown.find(x => !x.problem) || shown[0];
         if (first) txt += ` · ${R.BUILDINGS[first.type].label}: ${R.BUILDINGS[first.type].extra}` + (first.problem ? ` · ${first.problem}` : '');
-        else txt += ' · Aquí podrás hacer un mercado, un taller o un templo (con Comercio, Forja o Monasterios)';
+        // Y por qué no se pueden hacer los demás (así se sabe qué falta).
+        for (const x of shown) if (x !== first && x.problem) txt += ` · ${R.BUILDINGS[x.type].label}: ${x.problem}`;
+        else txt += ' · Aquí podrás hacer un molino, un mercado, un taller, un templo o el Santuario de las leyendas (con Molinos, Comercio, Forja, Monasterios o Mitos)';
       } else if (!b && !st && owner && owner.owner === gm.turn && !R.buildingFor(t) && t.terrain !== 'mar' && t.terrain !== 'costa') {
         txt += ' · Aquí se puede hacer un camino, una muralla o una torre';
       }
@@ -1104,7 +1132,7 @@
       const box = $('tech-box');
       const esc = (x) => String(x).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]);
       let html = `<h2>Tecnologías de ${esc(nameOf(who))}</h2><p class="small">Oro ${p.gold} · Tienes ${p.techs.length} de ${Object.keys(R.TECHS).length}.`
-        + ' En cada rama se va en orden, y desde el nivel 2 hace falta una ciudad de ese nivel.</p>';
+        + ' En cada rama se va en orden, de izquierda a derecha, y una tecnología de nivel 2 o más pide una ciudad de ese nivel. Algunas piden antes una de otra rama. Toca una para ver todo lo que da.</p>';
       for (const b of R.BRANCHES) {
         html += `<div class="tb"><h3>${b.label}</h3><div class="cards">`;
         for (const id of R.techsOfBranch(b.id)) {
@@ -1123,7 +1151,14 @@
         let d = '';
         if (id) {
           const t = R.TECHS[id], have = R.hasTech(g, who, id), problem = R.techProblem(g, who, id);
-          d = `<b>${esc(t.label)}</b> (${R.branchLabel(id)}, nivel ${t.level}): ${esc(t.text)}.` + (t.later ? ' <i>Esto llega más adelante en el juego.</i>' : '');
+          const x = R.techDetails(id);
+          d = `<b>${esc(t.label)}</b> (rama ${R.branchLabel(id)}, nivel ${t.level}, ${R.techCost(g, who, id)} oro)`;
+          d += '<ul class="td">';
+          if (x.needs.length) d += `<li><b>Pide:</b> ${esc(x.needs.join(', '))}</li>`;
+          x.units.forEach(u => { d += `<li><b>Tropa</b> ${esc(u)}</li>`; });
+          x.buildings.forEach(b => { d += `<li><b>Edificio</b> ${esc(b)}</li>`; });
+          if (x.text) d += `<li>${esc(x.text)}.</li>`;
+          d += '</ul>';
           if (have) d += '<br>✓ Ya la tienes.';
           else if (problem && (canAct || !/turno/.test(problem))) d += `<br>${esc(problem)}`;
           else if (!canAct) d += '<br>Podrás investigarla en tu turno.';
@@ -1137,7 +1172,8 @@
           if (window.PEGame.busy || !window.PEGame.doTech(id)) return;
           ui.showTechs(id);
           $('tech-detail').insertAdjacentHTML('afterbegin', `<div>¡Investigada ${esc(R.TECHS[id].label)}!</div>`);
-          ui.say(`Has investigado ${R.TECHS[id].label}: ${R.TECHS[id].text}.`);
+          const x = R.techDetails(id), what = x.units.map(u => u.split(':')[0]).concat(x.buildings.map(b => b.split(':')[0]));
+          ui.say(`Has investigado ${R.TECHS[id].label}.` + (what.length ? ` Ya puedes: ${what.join(', ').toLowerCase()}.` : '') + (x.text ? ` ${x.text}.` : ''));
         };
       };
       box.querySelectorAll('.tc').forEach(el => { el.onclick = () => ui.showTechs(el.dataset.id); });

@@ -413,7 +413,103 @@
     return p.done();
   }
 
-  const DRAW = { colono, miliciano, arquero, jinete, espadachin, lancero, caballero, canon, catapulta, monje, mercader, barca, carabela, galeon };
+  // --- Criaturas legendarias --------------------------------------------------
+  // Lamia: mujer con cola de serpiente verde y azul, pelo largo y un pañuelo del color de la facción.
+  function lamia(color) {
+    const c = shades(color), p = new Pix(32, 36);
+    const SCALE = ['#7fd6b4', '#3f9e8a', '#2a6e6a', '#1d4a52'], HAIR = ['#3a6a58', '#24463c'];
+    shadow(p, 16, 33, 11);
+    // cola enroscada en el suelo
+    p.ellipse(15, 29, 11, 4, null, (u, v) => (v < -0.3 ? SCALE[0] : v > 0.4 ? SCALE[3] : SCALE[1]));
+    p.ellipse(15, 29, 6, 2, null, (u, v) => SCALE[2]);
+    for (let k = 0; k < 7; k++) p.set(6 + k * 3, 28 + (k % 2), SCALE[0]);   // escamas brillantes
+    p.line(4, 28, 1, 24, SCALE[1]); p.line(3, 28, 0, 25, SCALE[2]); p.set(1, 23, SCALE[0]); // punta de la cola
+    // tronco de serpiente que sube hasta la cintura
+    for (let y = 20; y <= 27; y++) { p.rect(12, y, 7, 1, SCALE[1]); p.set(12, y, SCALE[0]); p.set(18, y, SCALE[2]); }
+    for (let y = 21; y <= 27; y += 2) p.rect(14, y, 3, 1, '#c8e8a8');        // vientre claro
+    // cuerpo (piel algo verdosa) con pañuelo del color de la facción
+    body(p, 11, 13, 9, 8, [[214, 232, 196], [186, 214, 170], [150, 182, 140]]);
+    p.rect(11, 17, 9, 3, c[1]); p.rect(11, 17, 9, 1, c[0]); p.rect(18, 17, 2, 3, c[2]);
+    p.rect(19, 14, 4, 2, [186, 214, 170]); p.rect(22, 12, 2, 3, [186, 214, 170]); // brazo levantado (encantando)
+    p.set(23, 10, '#d8f0ff'); p.set(24, 9, '#a8e0ff'); p.set(25, 11, '#d8f0ff'); p.set(22, 8, '#a8e0ff'); // chispas mágicas
+    p.rect(13, 12, 5, 1, SKIN[1]);                                            // cuello
+    head(p, 15, 9);
+    p.set(16, 9, '#e0c030');                                                   // ojo de serpiente dorado
+    // pelo largo cayendo por la espalda
+    p.ellipse(14, 6, 4.5, 3, null, (u, v) => (u < 0 ? HAIR[1] : HAIR[0]));
+    p.rect(10, 6, 3, 11, HAIR[1]); p.rect(11, 6, 2, 9, HAIR[0]);
+    outline(p);
+    return p.done();
+  }
+
+  // Gigante: enorme, piel grisácea, garrote de tronco y taparrabos del color de la facción.
+  function gigante(color) {
+    const c = shades(color), p = new Pix(40, 46);
+    const ROCK = ['#c2b8a8', '#9a9082', '#73695e', '#524a42'];
+    shadow(p, 20, 43, 14);
+    // piernas como columnas
+    p.rect(13, 31, 5, 10, ROCK[1]); p.rect(13, 31, 1, 10, ROCK[0]); p.rect(22, 31, 5, 10, ROCK[2]);
+    p.rect(12, 40, 7, 2, ROCK[3]); p.rect(21, 40, 7, 2, ROCK[3]);
+    // torso ancho
+    p.ellipse(20, 22, 10, 10, null, (u, v) => (u < -0.45 ? ROCK[0] : u > 0.5 ? ROCK[2] : ROCK[1]));
+    p.rect(15, 20, 4, 1, ROCK[2]); p.rect(21, 20, 4, 1, ROCK[2]);              // pecho
+    // taparrabos y cinturón con el color de la facción
+    p.rect(12, 29, 16, 4, c[1]); p.rect(12, 29, 16, 1, c[0]); p.rect(25, 29, 3, 4, c[2]);
+    p.rect(17, 33, 6, 3, c[2]); p.rect(12, 28, 16, 1, LEATHER[2]); p.set(20, 28, '#d8b04a');
+    // brazo izquierdo colgando
+    p.rect(8, 16, 4, 12, ROCK[1]); p.rect(8, 16, 1, 12, ROCK[0]); p.rect(7, 27, 5, 3, ROCK[0]);
+    // brazo derecho con el garrote al hombro
+    p.rect(28, 15, 4, 7, ROCK[2]); p.rect(29, 10, 4, 6, ROCK[1]);
+    p.line(26, 18, 37, 1, WOOD[1]); p.line(27, 18, 38, 2, WOOD[2]); p.line(25, 18, 36, 1, WOOD[0]);
+    p.ellipse(36, 3, 3.5, 3.2, null, (u, v) => (u + v < 0 ? WOOD[0] : WOOD[2])); p.set(35, 4, '#4a3018');
+    // cabeza pequeña con cejas gruesas y barba
+    p.ellipse(20, 9, 5, 5.2, null, (u, v) => (u < -0.3 ? ROCK[0] : ROCK[1]));
+    p.rect(17, 7, 7, 1, ROCK[3]); p.set(21, 8, '#1a1010'); p.set(23, 8, '#1a1010');
+    p.rect(17, 12, 8, 3, '#6a5a48'); p.rect(18, 14, 6, 2, '#5a4a38');
+    p.set(25, 9, ROCK[2]);                                                       // nariz
+    outline(p);
+    return p.done();
+  }
+
+  // Dragón: cuerpo rojo con vientre dorado, alas abiertas del color de la facción, echando humo.
+  function dragon(color) {
+    const c = shades(color), p = new Pix(48, 42);
+    const RED = ['#f07a56', '#c8402a', '#8a2418', '#5a1410'], GOLD = ['#ffe08a', '#e0b048'];
+    shadow(p, 22, 39, 13);
+    // ala de atrás (más oscura)
+    for (let k = 0; k < 14; k++) p.line(19, 16, 4 + k, 2 + Math.round(k * 0.9), k % 4 === 0 ? RED[3] : c[3]);
+    // cola larga con punta
+    for (let k = 0; k < 12; k++) p.rect(12 - k, 28 + Math.round(Math.sin(k / 3) * 2), 3, 3, k < 5 ? RED[1] : RED[2]);
+    p.set(0, 27, RED[3]); p.set(1, 26, RED[2]); p.set(0, 30, RED[3]);
+    // patas
+    p.rect(15, 31, 4, 6, RED[2]); p.rect(25, 31, 4, 6, RED[2]); p.rect(14, 36, 6, 2, RED[3]); p.rect(24, 36, 6, 2, RED[3]);
+    // cuerpo
+    p.ellipse(22, 26, 10, 6.5, null, (u, v) => (v > 0.35 ? GOLD[1] : v < -0.4 ? RED[0] : RED[1]));
+    for (let x = 16; x <= 28; x += 3) p.set(x, 30, GOLD[0]);
+    // cuello y cabeza
+    for (let k = 0; k < 8; k++) p.rect(29 + k * 0.8, 21 - k * 1.4, 4, 4, k < 4 ? RED[1] : RED[0]);
+    p.rect(34, 7, 8, 5, RED[1]); p.rect(34, 7, 8, 1, RED[0]); p.rect(40, 9, 4, 3, RED[1]); p.rect(40, 11, 4, 1, RED[2]);
+    p.set(37, 8, '#ffe14a'); p.set(38, 8, '#1a1010');                           // ojo
+    p.line(34, 7, 31, 3, '#e8dcc0'); p.line(36, 7, 34, 2, '#e8dcc0');            // cuernos
+    for (let k = 0; k < 5; k++) p.set(31 - k * 0.5, 14 + k * 2, RED[3]);           // cresta
+    // llamita y humo en la boca
+    p.set(45, 10, '#ffd040'); p.set(46, 11, '#ff8a20'); p.set(45, 12, '#ff5a10'); p.set(47, 10, '#ffe890');
+    p.set(46, 7, '#b8b0a8', 200); p.set(47, 5, '#d8d0c8', 160);
+    // ala de delante, abierta, con la membrana del color de la facción
+    const wing = [[24, 18], [10, 4], [16, 1], [24, 0], [32, 4]];
+    for (let k = 1; k < wing.length; k++) {
+      const [x0, y0] = wing[0], [x1, y1] = wing[k], [x2, y2] = wing[Math.min(k + 1, wing.length - 1)];
+      for (let a = 0; a <= 1; a += 0.04) for (let b = 0; b <= 1 - a; b += 0.04) {
+        const x = x0 + (x1 - x0) * a + (x2 - x0) * b, y = y0 + (y1 - y0) * a + (y2 - y0) * b;
+        p.set(x, y, k === 1 ? c[2] : k === 2 ? c[1] : c[0]);
+      }
+    }
+    for (let k = 1; k < wing.length; k++) p.line(wing[0][0], wing[0][1], wing[k][0], wing[k][1], RED[2]); // huesos del ala
+    outline(p);
+    return p.done();
+  }
+
+  const DRAW = { colono, miliciano, arquero, jinete, espadachin, lancero, caballero, canon, catapulta, monje, mercader, barca, carabela, galeon, lamia, gigante, dragon };
   function makeUnitCanvas(type, color) { return DRAW[type](color); }
 
   root.PEUnits = { makeUnitCanvas, TYPES: Object.keys(DRAW) };
