@@ -1053,6 +1053,8 @@
         }
         const first = shown.find(x => !x.problem) || shown[0];
         if (first) txt += ` · ${R.BUILDINGS[first.type].label}: ${R.BUILDINGS[first.type].extra}` + (first.problem ? ` · ${first.problem}` : '');
+        // Y por qué no se pueden hacer los demás (así se sabe qué falta).
+        for (const x of shown) if (x !== first && x.problem) txt += ` · ${R.BUILDINGS[x.type].label}: ${x.problem}`;
         else txt += ' · Aquí podrás hacer un mercado, un taller o un templo (con Comercio, Forja o Monasterios), o el Santuario de las leyendas (con Mitos)';
       } else if (!b && !st && owner && owner.owner === gm.turn && !R.buildingFor(t) && t.terrain !== 'mar' && t.terrain !== 'costa') {
         txt += ' · Aquí se puede hacer un camino, una muralla o una torre';
