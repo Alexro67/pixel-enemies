@@ -24,7 +24,25 @@
   button.on{background:#8a5a1e;box-shadow:inset -2px -2px 0 #5a3a12,inset 2px 2px 0 #b07a32;}
   #bottombar{position:fixed;left:0;right:0;bottom:0;z-index:2;display:flex;gap:8px;align-items:center;justify-content:space-between;
     padding:6px 10px calc(6px + env(safe-area-inset-bottom));background:rgba(43,29,58,.92);border-top:3px solid #120c18;font-size:13px;}
-  #info{flex:1;min-width:0;}
+  #bottombar{flex-wrap:wrap;row-gap:5px;}
+  #info{flex-basis:100%;order:3;min-width:0;line-height:1.35;}
+  #turn{padding:4px 8px;border:2px solid #120c18;font-weight:bold;text-shadow:none;white-space:nowrap;}
+  #spacer{flex:1;}
+  #end{background:#2f7a3a;box-shadow:inset -2px -2px 0 #1d4f25,inset 2px 2px 0 #4fa85c;font-weight:bold;}
+  #overlay{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;
+    background:#1a1224;padding:20px;}
+  #overlay[hidden]{display:none;}
+  #overlay.see-through{background:rgba(26,18,36,.78);}
+  #ov-box{max-width:340px;width:100%;text-align:center;background:#2b1d3a;border:3px solid #120c18;
+    box-shadow:inset -3px -3px 0 #1d1428,inset 3px 3px 0 #4a3563;padding:22px 18px;}
+  #ov-title{font-size:24px;margin:0 0 12px;text-shadow:2px 2px 0 #000;}
+  #ov-text{font-size:14px;margin:0 0 18px;line-height:1.4;}
+  #ov-buttons{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+  #ov-cancel{font-size:15px;padding:10px 14px;}
+  #ov-input{font:inherit;font-size:18px;text-transform:uppercase;text-align:center;width:100%;margin:0 0 16px;padding:8px;
+    color:#f4e9c9;background:#1a1224;border:2px solid #120c18;box-shadow:inset 2px 2px 0 #000;}
+  #ov-btn{font-size:16px;padding:10px 16px;color:#fff;text-shadow:1px 1px 0 #000;
+    box-shadow:inset -3px -3px 0 rgba(0,0,0,.35),inset 3px 3px 0 rgba(255,255,255,.3);}
   @media (max-width:560px){#topbar h1{display:none;} button,select{font-size:12px;padding:4px 5px;}}
   #code{white-space:nowrap;}
 </style>
@@ -33,19 +51,33 @@
 <div id="game"></div>
 <div id="topbar">
   <h1>Pixel Enemies</h1>
-  <button id="new">Nuevo mapa</button>
+  <button id="new">Nueva partida</button>
   <select id="size" aria-label="Tamaño"></select>
   <select id="type" aria-label="Tipo de mapa"></select>
   <select id="abundance" aria-label="Recursos"></select>
+  <select id="armies" aria-label="Dónde empiezan los ejércitos"></select>
   <button id="fog">Niebla</button>
 </div>
 <div id="bottombar">
-  <span id="info"></span>
+  <span id="turn">Ronda 1</span>
+  <span id="spacer"></span>
   <button id="code" title="Código del mapa">------</button>
+  <button id="end">Pasar turno</button>
+  <span id="info"></span>
+</div>
+<div id="overlay" hidden>
+  <div id="ov-box">
+    <h2 id="ov-title"></h2>
+    <p id="ov-text"></p>
+    <input id="ov-input" maxlength="12" autocomplete="off" hidden>
+    <div id="ov-buttons"><button id="ov-cancel" hidden></button><button id="ov-btn"></button></div>
+  </div>
 </div>
 <script src="lib/phaser.min.js"></script>
 <script src="src/map.js"></script>
 <script src="src/tiles.js"></script>
+<script src="src/units.js"></script>
+<script src="src/rules.js"></script>
 <script src="src/game.js"></script>
 <script>
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');

@@ -422,6 +422,18 @@
     return p.done();
   }
 
+  // Casilla resaltada (a dónde puede ir una tropa, o a quién puede atacar).
+  function makeFillCanvas(fill, alpha, edge) {
+    const p = new Pix(TW, TH);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const d = edgeDist(x, y);
+      if (!d) continue;
+      if (d <= 2) p.set(x, TOP + y, edge, 230);
+      else if ((x + y) % 2 === 0 || d <= 4) p.set(x, TOP + y, fill, alpha);
+    }
+    return p.done();
+  }
+
   function makeFlagCanvas(color) {
     const p = new Pix(20, 30);
     const [r, g, b] = hex2rgb(color);
@@ -446,6 +458,6 @@
 
   root.PETiles = {
     W, H, TW, TH, TOP, SIDE, WATER_DROP, ROW_STEP, COL_STEP, VARIANTS,
-    makeTerrainCanvas, makeFogCanvas, makeOutlineCanvas, makeFlagCanvas, tileOrigin, insideHex,
+    makeTerrainCanvas, makeFogCanvas, makeOutlineCanvas, makeFlagCanvas, makeFillCanvas, tileOrigin, insideHex, edgeDist, Pix, hex2rgb,
   };
 })(this);
