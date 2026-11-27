@@ -6,9 +6,10 @@
 
   // --- Opciones (se ajustan aquí) ----------------------------------------
   const SIZES = {
-    pequeno: { cols: 12, rows: 12, players: 2, label: 'Pequeño' },
-    mediano: { cols: 16, rows: 16, players: 4, label: 'Mediano' },
-    grande:  { cols: 20, rows: 20, players: 6, label: 'Grande' },
+    // radius = casillas del centro al borde; el mapa es un hexágono de lado radius+1.
+    pequeno: { radius: 8, players: 2, label: 'Pequeño' },   // 217 casillas
+    mediano: { radius: 10, players: 4, label: 'Mediano' },  // 331 casillas
+    grande:  { radius: 12, players: 6, label: 'Grande' },   // 469 casillas
   };
   // land = parte del mapa que es tierra; freq = lo "troceada" que sale la tierra.
   const MAP_TYPES = {
@@ -29,7 +30,7 @@
     llanura:  { label: 'Llanura' },
     bosque:   { label: 'Bosque' },
     montana:  { label: 'Montaña' },
-    rio:      { label: 'Río' },
+    rio:      { label: 'Río', fresh: true },
   };
   const RESOURCE = {
     caza:    { label: 'Caza', kind: 'comida' },
@@ -109,40 +110,51 @@
   }
 
   // --- Generación ----------------------------------------------------------
+  // El mapa tiene forma de hexágono: casillas a "radius" pasos o menos del centro.
   function generate(opts) {
     const size = SIZES[opts.size] || SIZES.mediano;
     const type = MAP_TYPES[opts.type] || MAP_TYPES.costas;
     const seed = String(opts.seed || randomCode()).toUpperCase();
     const abundance = ABUNDANCE[opts.abundance] || ABUNDANCE.normal;
     const rng = makeRng(seed + '|' + opts.size + '|' + opts.type);
-    const { cols, rows } = size;
+    const R = size.radius, cols = 2 * R + 1, rows = 2 * R + 1;
     const players = opts.players || size.players;
     const elevN = makeNoise(rng), moistN = makeNoise(rng), rockN = makeNoise(rng);
+
+    // Posición (de -1 a 1) del centro de cada casilla respecto al centro del mapa.
+    const pos = (c, r) => ({ x: ((c + (r & 1) * 0.5) - (R + (R & 1) * 0.5)) / R, y: (r - R) * (Math.sqrt(3) / 2) / R });
 
     // Mapa de islas: varias islas separadas por mar (al menos una por jugador).
     let centers = null;
     if (type.islands) {
       centers = [];
-      const want = players + 2 + Math.floor(rng() * 3), minD = 0.85 / Math.sqrt(want);
-      for (let tries = 0; centers.length < want && tries < 500; tries++) {
-        const k = { x: 0.12 + rng() * 0.76, y: 0.12 + rng() * 0.76, rad: minD * (0.55 + rng() * 0.35) };
+      const want = players + 2 + Math.floor(rng() * 3), minD = 1.7 / Math.sqrt(want);
+      for (let tries = 0; centers.length < want && tries < 800; tries++) {
+        const a = rng() * Math.PI * 2, d = Math.sqrt(rng()) * 0.72;
+        const k = { x: Math.cos(a) * d, y: Math.sin(a) * d, rad: minD * (0.55 + rng() * 0.35) };
         if (centers.every(o => Math.hypot(o.x - k.x, o.y - k.y) > minD)) centers.push(k);
       }
     }
+
+    const grid = new Array(cols * rows).fill(null);
     const tiles = [];
-    const at = (c, r) => tiles[r * cols + c];
+    const at = (c, r) => (c >= 0 && c < cols && r >= 0 && r < rows ? grid[r * cols + c] : null);
+    const nb = (t) => neighbors(t.col, t.row, cols, rows).map(([c, r]) => at(c, r)).filter(Boolean);
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        // Posición real del centro (las filas impares van medio hueco a la derecha).
-        const px = (c + (r & 1) * 0.5) / cols, py = r / rows;
-        const nx = px * type.freq * 2, ny = py * type.freq * 2;
+        const ring = distance(c, r, R, R);
+        if (ring > R) continue;
+        const p = pos(c, r);
+        const nx = (p.x + 1) * type.freq, ny = (p.y + 1) * type.freq;
         // Los bordes tienden a ser mar.
-        const dx = px - 0.5, dy = py - 0.5;
-        const edge = Math.min(1, Math.sqrt(dx * dx + dy * dy) * 2);
+        const edge = ring / R;
         let elev = elevN(nx, ny) - edge * edge * type.edge;
-        if (centers) elev = elev * 0.6 + Math.max(...centers.map(k => 1 - Math.hypot(px - k.x, py - k.y) / k.rad)) * 0.9;
-        tiles.push({ col: c, row: r, elev, moist: moistN(nx * 1.3 + 9, ny * 1.3), rock: rockN(nx * 1.7, ny * 1.7 + 5),
-          terrain: 'mar', resource: null });
+        if (centers) elev = elev * 0.6 + Math.max(...centers.map(k => 1 - Math.hypot(p.x - k.x, p.y - k.y) / k.rad)) * 0.9;
+        elev -= Math.max(0, edge - 0.8) * 4; // la última vuelta del mapa casi siempre es mar
+        const t = { i: tiles.length, col: c, row: r, ring, elev, moist: moistN(nx * 1.3 + 9, ny * 1.3),
+          rock: rockN(nx * 1.7, ny * 1.7 + 5), terrain: 'mar', resource: null };
+        grid[r * cols + c] = t;
+        tiles.push(t);
       }
     }
 
@@ -161,35 +173,29 @@
 
     // Costa: agua que toca tierra.
     for (const t of tiles) {
-      if (t.terrain !== 'mar') continue;
-      if (neighbors(t.col, t.row, cols, rows).some(([c, r]) => !TERRAIN[at(c, r).terrain].water)) t.terrain = 'costa';
+      if (t.terrain === 'mar' && nb(t).some(n => !TERRAIN[n.terrain].water)) t.terrain = 'costa';
     }
 
     // Ríos: nacen junto a una montaña y bajan hasta el agua.
     const distWater = new Array(tiles.length).fill(Infinity);
-    const queue = [];
-    tiles.forEach((t, i) => { if (TERRAIN[t.terrain].water) { distWater[i] = 0; queue.push(t); } });
+    const queue = tiles.filter(t => TERRAIN[t.terrain].water);
+    queue.forEach(t => (distWater[t.i] = 0));
     for (let qi = 0; qi < queue.length; qi++) {
-      const t = queue[qi], d = distWater[t.row * cols + t.col];
-      for (const [c, r] of neighbors(t.col, t.row, cols, rows)) {
-        const i = r * cols + c;
-        if (distWater[i] > d + 1) { distWater[i] = d + 1; queue.push(at(c, r)); }
-      }
+      const t = queue[qi];
+      for (const n of nb(t)) if (distWater[n.i] > distWater[t.i] + 1) { distWater[n.i] = distWater[t.i] + 1; queue.push(n); }
     }
     const wantRivers = Math.max(1, Math.round(land.length / 70));
-    const sources = land.filter(t => t.terrain !== 'montana' && distWater[t.row * cols + t.col] >= 3 &&
-      neighbors(t.col, t.row, cols, rows).some(([c, r]) => at(c, r).terrain === 'montana'));
+    const sources = land.filter(t => t.terrain !== 'montana' && distWater[t.i] >= 3 && nb(t).some(n => n.terrain === 'montana'));
     let made = 0;
     while (made < wantRivers && sources.length) {
       const src = sources.splice(Math.floor(rng() * sources.length), 1)[0];
-      if (src.terrain === 'rio') continue;
+      if (src.terrain === 'rio' || nb(src).some(n => n.terrain === 'rio')) continue;
       const path = [src];
       let cur = src, ok = false;
       for (let step = 0; step < 40; step++) {
-        const d = distWater[cur.row * cols + cur.col];
+        const d = distWater[cur.i];
         if (d <= 1) { ok = true; break; }
-        const next = neighbors(cur.col, cur.row, cols, rows).map(([c, r]) => at(c, r))
-          .filter(n => distWater[n.row * cols + n.col] === d - 1 && n.terrain !== 'montana' && n.terrain !== 'rio');
+        const next = nb(cur).filter(n => distWater[n.i] === d - 1 && n.terrain !== 'montana' && n.terrain !== 'rio');
         if (!next.length) break;
         cur = next[Math.floor(rng() * next.length)];
         path.push(cur);
@@ -197,7 +203,7 @@
       if (ok && path.length >= 2) { path.forEach(t => (t.terrain = 'rio')); made++; }
     }
 
-    // Recursos.
+    // Recursos: cambian el dibujo de la propia casilla.
     const options = {
       llanura: ['trigo', 'trigo', 'cantera'],
       bosque: ['caza', 'lena'],
@@ -212,9 +218,8 @@
       if (rng() < abundance.chance) t.resource = list[Math.floor(rng() * list.length)];
     }
 
-    // Puntos de salida: casillas de llanura o bosque, lo más separadas posible.
-    const startable = tiles.filter(t => (t.terrain === 'llanura' || t.terrain === 'bosque') &&
-      t.col > 0 && t.row > 0 && t.col < cols - 1 && t.row < rows - 1);
+    // Puntos de salida: casillas de llanura o bosque, lo más separadas posible y lejos del borde.
+    const startable = tiles.filter(t => (t.terrain === 'llanura' || t.terrain === 'bosque') && !t.resource && t.ring < R);
     const starts = [];
     if (startable.length) {
       starts.push(startable[Math.floor(rng() * startable.length)]);
@@ -228,14 +233,22 @@
       }
     }
 
+    const out = tiles.map(t => ({ col: t.col, row: t.row, terrain: t.terrain, resource: t.resource }));
+    const index = new Array(cols * rows).fill(-1);
+    out.forEach((t, i) => (index[t.row * cols + t.col] = i));
     return {
-      seed, size: opts.size, type: opts.type, abundance: opts.abundance, cols, rows,
-      tiles: tiles.map(t => ({ col: t.col, row: t.row, terrain: t.terrain, resource: t.resource })),
+      seed, size: opts.size, type: opts.type, abundance: opts.abundance, radius: R, cols, rows,
+      tiles: out, index,
       starts: starts.map(t => ({ col: t.col, row: t.row })),
     };
   }
+  function tileAt(map, col, row) {
+    if (col < 0 || row < 0 || col >= map.cols || row >= map.rows) return null;
+    const i = map.index[row * map.cols + col];
+    return i >= 0 ? map.tiles[i] : null;
+  }
 
-  const api = { SIZES, MAP_TYPES, ABUNDANCE, TERRAIN, RESOURCE, generate, neighbors, distance, randomCode };
+  const api = { SIZES, MAP_TYPES, ABUNDANCE, TERRAIN, RESOURCE, generate, tileAt, neighbors, distance, randomCode };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PEMap = api;
 })(this);

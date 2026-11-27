@@ -1,4 +1,4 @@
-const CACHE = 'pixel-enemies-v2';
+const CACHE = 'pixel-enemies-v3';
 const FILES = ['./', 'index.html', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png',
   'lib/phaser.min.js', 'src/map.js', 'src/tiles.js', 'src/game.js'];
 self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); });

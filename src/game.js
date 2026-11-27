@@ -5,6 +5,7 @@
   const FACTION_COLORS = ['#d23b3b', '#e8c021', '#3b6fd2', '#3fa34d', '#8e4bc4', '#ee8a2a'];
   const FACTION_NAMES = ['Hondarribia', 'Irun', 'Donosti', 'Lekumberri', 'Alli', 'Leitza'];
   const RELIEF = true; // casillas con un poco de relieve, como una maqueta
+  const DPR = Math.min(3, window.devicePixelRatio || 1); // más resolución en pantallas nítidas
 
   const state = {
     size: localGet('pe.size', 'mediano'),
@@ -24,19 +25,36 @@
       this.cameras.main.setBackgroundColor('#1b2f4f');
       this.input.addPointer(2);
       this.setupControls();
-      this.scale.on('resize', () => this.fitCamera());
+      window.addEventListener('resize', () => {
+        this.scale.resize(window.innerWidth * DPR, window.innerHeight * DPR);
+        this.scale.setZoom(1 / DPR);
+        this.fitCamera();
+      });
       window.PEGame = this;
       this.newMap(new URLSearchParams(location.search).get('mapa') || undefined);
     }
 
     makeTextures() {
-      for (const terrain of Object.keys(M.TERRAIN))
-        for (let v = 0; v < T.VARIANTS; v++)
-          this.textures.addCanvas(`t_${terrain}_${v}`, T.makeTerrainCanvas(terrain, v, RELIEF));
-      for (const res of Object.keys(M.RESOURCE)) this.textures.addCanvas(`r_${res}`, T.makeResourceCanvas(res));
-      FACTION_COLORS.forEach((c, i) => this.textures.addCanvas(`flag_${i}`, T.makeFlagCanvas(c)));
-      this.textures.addCanvas('fog', T.makeFogCanvas());
-      this.textures.addCanvas('select', T.makeOutlineCanvas('#fff6c8'));
+      const combos = { llanura: ['trigo', 'cantera'], bosque: ['caza', 'lena'], montana: ['mineral', 'cantera'],
+        costa: ['pesca'], rio: ['pesca'], mar: [] };
+      for (const terrain of Object.keys(M.TERRAIN).filter(k => k !== 'rio'))
+        for (const res of [null, ...combos[terrain]])
+          for (let v = 0; v < T.VARIANTS; v++)
+            this.addTex(`t_${terrain}_${res || 'nada'}_${v}`, T.makeTerrainCanvas(terrain, res, v));
+      FACTION_COLORS.forEach((c, i) => this.addTex(`flag_${i}`, T.makeFlagCanvas(c)));
+      this.addTex('fog', T.makeFogCanvas());
+      this.addTex('select', T.makeOutlineCanvas('#fff6c8'));
+    }
+    // Al alejar el zoom, suaviza (se ve mejor); al acercar, píxeles nítidos.
+    addTex(key, canvas) {
+      const tex = this.textures.addCanvas(key, canvas);
+      const gl = this.renderer.gl, glt = tex && tex.source[0].glTexture;
+      if (gl && glt) {
+        gl.bindTexture(gl.TEXTURE_2D, glt.webGLTexture || glt);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+      }
     }
 
     newMap(seed) {
@@ -45,33 +63,39 @@
       const map = M.generate({ seed, size: state.size, type: state.type, abundance: state.abundance });
       state.map = map;
       this.layer = this.add.container(0, 0);
-      this.tileObjs = [];
       this.tileImgs = [];
       this.decor = [];
-      const tex = (t) => `t_${t.terrain}_${(t.col * 7 + t.row * 13) % T.VARIANTS}`;
+      const variant = (t) => (t.col * 7 + t.row * 13) % T.VARIANTS;
+      const tex = (t) => {
+        if (t.terrain !== 'rio') return `t_${t.terrain}_${t.resource || 'nada'}_${variant(t)}`;
+        // Los ríos se dibujan según hacia dónde siguen (otro río o el mar).
+        const odd = t.row & 1;
+        const dirs = odd ? [[1, 0], [-1, 0], [0, -1], [1, -1], [0, 1], [1, 1]]
+                         : [[1, 0], [-1, 0], [-1, -1], [0, -1], [-1, 1], [0, 1]];
+        let open = 0;
+        dirs.forEach(([dc, dr], i) => {
+          const n = M.tileAt(map, t.col + dc, t.row + dr);
+          if (n && (n.terrain === 'rio' || M.TERRAIN[n.terrain].water)) open |= 1 << i;
+        });
+        const key = `t_rio_${t.resource || 'nada'}_${variant(t)}_${open}`;
+        if (!this.textures.exists(key)) this.addTex(key, T.makeTerrainCanvas('rio', t.resource, variant(t), open));
+        return key;
+      };
 
       for (const t of map.tiles) {
         const o = T.tileOrigin(t.col, t.row);
         const img = this.add.image(o.x, o.y, tex(t)).setOrigin(0, 0);
-        img.setDepth(t.row);
+        // El agua va siempre por debajo, así se ve el borde de la tierra sobre ella.
+        img.setDepth(M.TERRAIN[t.terrain].water ? t.row - 1000 : t.row);
         this.layer.add(img);
         this.tileImgs.push(img);
-        const decor = [];
-        this.decor.push(decor);
-        if (t.terrain === 'rio') { const g = this.drawRiver(map, t, o); this.layer.add(g); decor.push(g); }
-        if (t.resource) {
-          const water = M.TERRAIN[t.terrain].water;
-          const r = this.add.image(o.x + T.W / 2, o.y + T.TOP + T.H / 2 + (water && RELIEF ? T.WATER_DROP : 0) + 4,
-            `r_${t.resource}`).setDepth(t.row + 0.6);
-          this.layer.add(r);
-          decor.push(r);
-        }
+        this.decor.push([]);
       }
       map.starts.forEach((s, i) => {
         const o = T.tileOrigin(s.col, s.row);
-        const f = this.add.image(o.x + T.W / 2 + 1, o.y + T.TOP + T.H / 2 - 6, `flag_${i}`).setDepth(s.row + 0.7);
+        const f = this.add.image(o.x + T.W / 2 + 4, o.y + T.TOP + T.H / 2 - 8, `flag_${i}`).setDepth(s.row + 0.7);
         this.layer.add(f);
-        this.decor[s.row * map.cols + s.col].push(f);
+        this.decor[map.index[s.row * map.cols + s.col]].push(f);
       });
       this.selectImg = this.add.image(0, 0, 'select').setOrigin(0, 0).setVisible(false).setDepth(999);
       this.layer.add(this.selectImg);
@@ -85,48 +109,28 @@
       ui.onMap(map);
     }
 
-    drawRiver(map, t, o) {
-      const g = this.add.graphics().setDepth(t.row + 0.5);
-      const cx = o.x + T.W / 2, cy = o.y + T.TOP + T.H / 2;
-      const targets = M.neighbors(t.col, t.row, map.cols, map.rows)
-        .map(([c, r]) => map.tiles[r * map.cols + c])
-        .filter(n => n.terrain === 'rio' || M.TERRAIN[n.terrain].water);
-      g.fillStyle(0x3d8fd0, 1);
-      for (const n of targets) {
-        const no = T.tileOrigin(n.col, n.row);
-        const nx = no.x + T.W / 2, ny = no.y + T.TOP + T.H / 2;
-        const ex = (cx + nx) / 2, ey = (cy + ny) / 2;
-        // Tramo pixelado del centro al borde.
-        const steps = 12;
-        for (let i = 0; i <= steps; i++) {
-          const x = Math.round(cx + (ex - cx) * i / steps), y = Math.round(cy + (ey - cy) * i / steps);
-          g.fillRect(x - 2, y - 2, 4, 4);
-        }
-      }
-      g.fillStyle(0x6db3e0, 1);
-      g.fillRect(Math.round(cx) - 1, Math.round(cy) - 1, 2, 2);
-      return g;
-    }
-
     applyFog() {
       const map = state.map, me = map.starts[0];
       map.tiles.forEach((t, i) => {
         const hidden = state.fog && me && M.distance(t.col, t.row, me.col, me.row) > 2;
         // Con niebla, la casilla se ve oscura y sin nada encima.
         this.tileImgs[i].setTexture(hidden ? 'fog' : this.texOf(t));
+        this.tileImgs[i].setDepth(M.TERRAIN[t.terrain].water && !hidden ? t.row - 1000 : t.row);
         this.decor[i].forEach(d => d.setVisible(!hidden));
         t.hidden = hidden;
       });
+      this.layer.sort('depth');
     }
 
     // --- Cámara: mover con un dedo, zoom con dos dedos o la rueda ---------
     fitCamera() {
       const cam = this.cameras.main;
-      const w = this.scale.width, h = this.scale.height - ui.barHeight();
-      this.minZoom = Math.min(w / this.worldW, h / this.worldH) * 0.9;
-      this.maxZoom = Math.max(6, this.minZoom * 4);
+      const top = ui.topHeight() * DPR, bottom = ui.bottomHeight() * DPR;
+      const w = this.scale.width, h = this.scale.height - top - bottom;
+      this.minZoom = Math.min(w / this.worldW, h / (this.worldH - T.TOP)) * 0.96;
+      this.maxZoom = Math.max(3 * DPR, this.minZoom * 4);
       cam.setZoom(this.minZoom);
-      cam.centerOn(this.worldW / 2, this.worldH / 2 + ui.barHeight() / 2 / this.minZoom);
+      cam.centerOn(this.worldW / 2, (this.worldH + T.TOP) / 2 + (top - bottom) / 2 / this.minZoom);
     }
     worldAt(sx, sy) {
       const cam = this.cameras.main;
@@ -171,7 +175,7 @@
           cam.scrollX -= (p.x - prev.x) / cam.zoom;
           cam.scrollY -= (p.y - prev.y) / cam.zoom;
           this.clampCamera();
-          if (tapStart && Math.hypot(p.x - tapStart.x, p.y - tapStart.y) > 10) tapStart = null;
+          if (tapStart && Math.hypot(p.x - tapStart.x, p.y - tapStart.y) > 10 * DPR) tapStart = null;
         }
         prev.x = p.x; prev.y = p.y;
         if (pointers.size >= 2) {
@@ -217,7 +221,8 @@
   // --- Botones y textos (HTML encima del mapa) ----------------------------
   const $ = (id) => document.getElementById(id);
   const ui = {
-    barHeight() { return $('topbar').offsetHeight; },
+    topHeight() { return $('topbar').offsetHeight; },
+    bottomHeight() { return $('bottombar').offsetHeight; },
     onMap(map) {
       $('code').textContent = map.seed;
       $('size').value = state.size;
@@ -249,7 +254,7 @@
       const c = window.prompt('Escribe un código de mapa para repetirlo:', state.map.seed);
       if (c && c.trim()) window.PEGame.newMap(c.trim().toUpperCase().slice(0, 12));
     };
-    for (const [k, v] of Object.entries(M.SIZES)) $('size').add(new Option(`${v.label} ${v.cols}×${v.rows}`, k));
+    for (const [k, v] of Object.entries(M.SIZES)) $('size').add(new Option(`${v.label} (${2 * v.radius + 1} de ancho)`, k));
     for (const [k, v] of Object.entries(M.MAP_TYPES)) $('type').add(new Option(v.label, k));
     for (const [k, v] of Object.entries(M.ABUNDANCE)) $('abundance').add(new Option(v.label, k));
   }
@@ -261,7 +266,7 @@
       parent: 'game',
       pixelArt: true,
       backgroundColor: '#1b2f4f',
-      scale: { mode: Phaser.Scale.RESIZE, width: window.innerWidth, height: window.innerHeight },
+      scale: { mode: Phaser.Scale.NONE, width: window.innerWidth * DPR, height: window.innerHeight * DPR, zoom: 1 / DPR },
       scene: [MapScene],
       banner: false,
     });
