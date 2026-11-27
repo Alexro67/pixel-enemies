@@ -22,7 +22,7 @@
     barco:       { label: 'Barco', text: 'navega por el agua y no conquista ciudades' },
     transporte:  { label: 'Transporte', text: 'lleva tropas: llévalas a su casilla para subirlas' },
     legendaria:  { label: 'Legendaria', text: 'sale del Santuario de las leyendas y solo puedes tener una de cada' },
-    anfibia:     { label: 'Anfibia', text: 'anda por tierra, río y costa (no por el mar abierto) y el agua no la para' },
+    anfibia:     { label: 'Anfibia', text: 'anda por tierra, río y costa, pero no por el mar abierto, y el agua no la para' },
     encanta:     { label: 'Encanta', text: 'la tropa a la que ataca no puede moverse en su siguiente turno' },
     derriba:     { label: 'Derriba murallas', text: 'hace el triple de daño a murallas y torres' },
     vuela:       { label: 'Vuela', text: 'pasa por encima de agua, bosques, montañas y murallas sin pararse, y puede quedarse sobre el agua' },
@@ -46,41 +46,48 @@
   };
 
   // --- Tecnologías --------------------------------------------------------
-  // 5 ramas. En cada rama hay que ir en orden, y desde el nivel 2 hace falta tener
-  // una ciudad de ese nivel. "later": se puede investigar, pero lo que da llega más adelante.
+  // Ramas. Dentro de cada rama hay que ir en orden (de izquierda a derecha), y una
+  // tecnología de nivel N (2 o más) pide tener una ciudad de nivel N.
+  // "after": tecnologías de OTRAS ramas que hacen falta antes (porque lo que da las necesita).
+  // El texto explica lo que no son tropas ni edificios; esos se explican solos (techDetails).
   const BRANCHES = [
-    { id: 'campo',  label: 'Campo' },
-    { id: 'monte',  label: 'Monte' },
+    { id: 'campo',    label: 'Campo' },
+    { id: 'comercio', label: 'Comercio' },
+    { id: 'monte',    label: 'Monte' },
+    { id: 'armas',    label: 'Armas' },
     { id: 'caballos', label: 'Caballos' },
-    { id: 'tiro',   label: 'Tiro' },
-    { id: 'guerra', label: 'Defensa' },
-    { id: 'mar',    label: 'Mar' },
-    { id: 'saber',  label: 'Saber' },
+    { id: 'guerra',   label: 'Defensa' },
+    { id: 'mar',      label: 'Mar' },
+    { id: 'saber',    label: 'Saber' },
   ];
   const TECHS = {
-    caza:          { branch: 'campo',  level: 1, label: 'Caza y caminos', text: 'Puedes construir el puesto de caza (5 oro, +2 comida) en bosques con animales, y caminos y puentes (2 oro). Por camino las tropas gastan medio movimiento y una ciudad unida a la capital da +1 oro. Y puedes ampliar el territorio de tus ciudades (8 oro, un anillo más de casillas)' },
-    molinos:       { branch: 'campo',  level: 2, label: 'Molinos',        text: 'Cada plantación de trigo da +1 comida más (2 en vez de 1)' },
-    gremios:       { branch: 'campo',  level: 3, label: 'Gremios',        text: 'Subir una ciudad de nivel pide 1 edificio menos en su territorio' },
-    comercio:      { branch: 'campo',  level: 4, label: 'Comercio',       text: 'Puedes construir el mercado (8 oro, +1 oro por cada edificio de al lado, cambia comida por oro) y reclutar al mercader (5 comida), que abre rutas de comercio entre dos ciudades unidas por camino: 1 oro por turno a cada una, o 2 si están a más de 4 casillas' },
-    lenadores:     { branch: 'monte',  level: 1, label: 'Leñadores',      text: 'Puedes construir el aserradero (3 oro, +1 oro, +1 más si queda otro bosque libre) en bosques con leña. Tu infantería gana +1 de defensa en el bosque' },
-    mineria:       { branch: 'monte',  level: 2, label: 'Minería',        text: 'Puedes construir la mina (6 oro, +2 oro) en montañas con mineral' },
-    forja:         { branch: 'monte',  level: 3, label: 'Forja',          text: 'Puedes reclutar el espadachín (8 comida, fuerte en todo) y construir el taller (8 oro, +1 oro por mina, cantera o aserradero de al lado; abarata 1 oro los edificios de su ciudad y permite cañones y catapultas)' },
+    caza:          { branch: 'campo',  level: 1, label: 'Caza y caminos',
+                     text: 'Caminos y puentes: 2 oro cada casilla, en tu territorio o en terreno neutral que veas. Ir de camino a camino gasta medio movimiento y el bosque, la montaña o el río no paran a la tropa. Cada ciudad unida por camino a tu capital da +1 oro, y la capital +1 por cada una. Ampliar territorio: 8 oro, la ciudad gana el anillo de casillas libres que la rodea' },
+    molinos:       { branch: 'campo',  level: 2, label: 'Molinos',        text: 'Cada plantación de trigo da 2 de comida en vez de 1' },
+    gremios:       { branch: 'campo',  level: 3, label: 'Gremios',        text: 'Para subir una ciudad de nivel hace falta 1 edificio menos en su territorio' },
+    comercio:      { branch: 'comercio', level: 3, label: 'Comercio', after: ['caza'],
+                     text: 'En el mercado puedes cambiar 2 comida por 1 oro o 2 oro por 1 comida, 3 veces por turno. El mercader abre una ruta de comercio al llegar a otra ciudad (tuya o de otro) unida por camino a la suya: cada turno, 1 oro para cada ciudad, o 2 si están a más de 4 casillas. Una tropa o muralla de un tercero en el camino la corta. Pide antes Caza y caminos porque las rutas van por camino' },
+    rutas:         { branch: 'comercio', level: 4, label: 'Rutas marítimas', after: ['pesca'],
+                     text: 'Una ruta de comercio vale también por agua: si las dos ciudades tienen muelle o puerto unidos por agua, no hace falta camino. Lleva al mercader en barco hasta la otra ciudad. Pide antes Pesca porque hacen falta muelles y barcos' },
+    lenadores:     { branch: 'monte',  level: 1, label: 'Leñadores',      text: 'Tu infantería gana +1 de defensa en el bosque' },
+    mineria:       { branch: 'monte',  level: 2, label: 'Minería',        text: '' },
     montaneros:    { branch: 'monte',  level: 4, label: 'Montañeros',     text: 'Todas tus tropas ganan +1 de defensa en la montaña' },
-    equitacion:    { branch: 'caballos', level: 1, label: 'Equitación',   text: 'Puedes reclutar el jinete (6 comida): mueve 2, ve a 2 casillas y puede moverse después de atacar' },
-    caballeria:    { branch: 'caballos', level: 2, label: 'Caballería',   text: 'Puedes reclutar el caballero (12 comida): 15 de vida, ataque 4, mueve 2 y si mata vuelve a atacar' },
-    arqueria:      { branch: 'tiro',   level: 1, label: 'Arquería',       text: 'Puedes reclutar el arquero (5 comida): dispara a 2 casillas y se defiende bien en el bosque' },
-    polvora:       { branch: 'tiro',   level: 2, label: 'Pólvora',        text: 'Puedes reclutar el cañón (9 comida, dispara a 2 casillas, si se mueve no ataca ese turno). Solo en ciudades con taller' },
-    ingenieria:    { branch: 'tiro',   level: 3, label: 'Ingeniería',     text: 'Puedes reclutar la catapulta (12 comida, dispara a 3 casillas, nadie le devuelve el golpe, si se mueve no ataca ese turno). Solo en ciudades con taller' },
-    fortificacion: { branch: 'guerra', level: 1, label: 'Fortificación',  text: 'Puedes fortificar ciudades (5 oro, +2 de defensa al que la defiende) y reclutar al lancero (6 comida, +2 de defensa contra jinetes)' },
-    murallas:      { branch: 'guerra', level: 2, label: 'Murallas',       text: 'Puedes construir murallas (4 oro, 30 de vida, el enemigo no pasa) y torres de vigía (7 oro, 20 de vida, ven a 3 casillas)' },
-    pesca:         { branch: 'mar',    level: 1, label: 'Pesca',          text: 'Puedes construir el puerto pesquero (4 oro, +1 comida y +1 oro) en agua con peces y el muelle (3 oro) en cualquier casilla de costa o río de tu territorio. Los dos sirven para sacar barcos. Y puedes reclutar la barca (5 comida): va por ríos y por la costa, mueve 3 y lleva 2 tropas' },
-    astilleros:    { branch: 'mar',    level: 2, label: 'Astilleros',     text: 'Puedes reclutar la carabela (9 comida): va por la costa y el mar abierto, mueve 4, ve a 2 casillas y lleva 2 tropas. Sale de un muelle o puerto de costa' },
-    rutas:         { branch: 'mar',    level: 3, label: 'Rutas marítimas', text: 'Una ruta de comercio vale también por agua: si las dos ciudades tienen muelle o puerto y están unidas por agua, no hace falta camino. Lleva el mercader en barco a la otra ciudad' },
-    armada:        { branch: 'mar',    level: 4, label: 'Armada',         text: 'Puedes reclutar el galeón de guerra (18 comida): 20 de vida, ataque 4, dispara a 2 casillas. Va por la costa y el mar abierto y no lleva tropas' },
+    arqueria:      { branch: 'armas',  level: 1, label: 'Arquería',       text: '' },
+    forja:         { branch: 'armas',  level: 2, label: 'Forja',          text: 'Con el taller, los demás edificios de esa ciudad cuestan 1 oro menos' },
+    polvora:       { branch: 'armas',  level: 3, label: 'Pólvora',        text: 'El cañón solo se recluta en ciudades con taller (por eso Forja va antes)' },
+    ingenieria:    { branch: 'armas',  level: 4, label: 'Ingeniería',     text: 'La catapulta solo se recluta en ciudades con taller' },
+    equitacion:    { branch: 'caballos', level: 1, label: 'Equitación',   text: '' },
+    caballeria:    { branch: 'caballos', level: 2, label: 'Caballería',   text: '' },
+    fortificacion: { branch: 'guerra', level: 1, label: 'Fortificación',  text: 'Fortificar una ciudad: 5 oro, la tropa que la defiende gana +2 de defensa (no se suma al terreno ni a la muralla: cuenta la mayor)' },
+    murallas:      { branch: 'guerra', level: 2, label: 'Murallas',
+                     text: 'Muralla: 4 oro por casilla, 30 de vida; el enemigo no puede pasar y tu tropa encima gana +2 de defensa. Torre de vigía: 7 oro, 20 de vida, ve a 3 casillas, una por cada ciudad que tengas. Las dos se hacen en tu territorio o en terreno neutral que veas (no en el agua) y se reparan por 2 oro' },
+    pesca:         { branch: 'mar',    level: 1, label: 'Pesca',          text: 'Los barcos salen del muelle o del puerto de la ciudad que los recluta' },
+    astilleros:    { branch: 'mar',    level: 2, label: 'Astilleros',     text: 'La carabela sale de un muelle o puerto de costa (no de río)' },
+    armada:        { branch: 'mar',    level: 4, label: 'Armada',         text: '' },
     escritura:     { branch: 'saber',  level: 1, label: 'Escritura',      text: 'Todas las demás tecnologías te cuestan 1 oro menos' },
-    monasterios:   { branch: 'saber',  level: 2, label: 'Monasterios',    text: 'Puedes construir el templo (6 oro, +1 comida por cada plantación, puesto de caza o puerto de al lado; tus tropas heridas en su territorio se curan 2 cada turno) y reclutar al monje (8 comida) en ciudades con templo: en vez de atacar, cura 3 de vida a tus tropas de al lado' },
-    mitos:         { branch: 'saber',  level: 3, label: 'Mitos',          text: 'Puedes construir el Santuario de las leyendas (15 oro, en una llanura vacía de una ciudad de nivel 4 o más) y reclutar allí la lamia (18 comida): anda por tierra y agua, mueve 2, y la tropa a la que ataca no puede moverse en su siguiente turno. Solo una lamia a la vez' },
-    leyendas:      { branch: 'saber',  level: 4, label: 'Leyendas',       text: 'Puedes reclutar en el Santuario el gigante (22 comida: 30 de vida, derriba murallas y torres, ve a 2) y el dragón (30 comida: vuela, mueve 3, ataque 5 y su fuego quema también a los de al lado). Solo uno de cada a la vez' },
+    monasterios:   { branch: 'saber',  level: 2, label: 'Monasterios',    text: 'Tus tropas heridas que estén en el territorio de una ciudad con templo se curan 2 de vida solas al empezar tu turno. El monje solo se recluta en ciudades con templo' },
+    mitos:         { branch: 'saber',  level: 3, label: 'Mitos',          text: 'Las criaturas legendarias solo se reclutan en el Santuario, y solo puedes tener una de cada a la vez' },
+    leyendas:      { branch: 'saber',  level: 4, label: 'Leyendas',       text: 'Se reclutan en el Santuario de las leyendas (por eso Mitos va antes)' },
   };
   const TECH_COST = [0, 3, 5, 8, 12]; // por nivel de la tecnología
 
@@ -179,7 +186,7 @@
     templo:     { label: 'Templo',  big: true, nearNeeded: 1, cost: 6, gives: {}, tech: 'monasterios', near: ['granja', 'caza', 'puerto'], per: 'comida',
                   extra: '+1 comida por cada plantación, puesto de caza o puerto de al lado. Tus tropas en su territorio se curan 2 solas y recluta monjes' },
     santuario:  { label: 'Santuario de las leyendas', big: true, cost: 15, gives: {}, tech: 'mitos', nearNeeded: 0, minLevel: 4,
-                  extra: 'aquí se reclutan la lamia, el gigante y el dragón. Solo en ciudades de nivel 4 o más' },
+                  extra: 'aquí se reclutan la lamia, el gigante y el dragón' },
   };
   const BIG = Object.keys(BUILDINGS).filter(k => BUILDINGS[k].big);
   const givesText = (g) => Object.entries(g).map(([k, v]) => `+${v} ${k}`).join(' y ');
@@ -1151,12 +1158,45 @@
     const t = TECHS[id];
     if (!t) return 'No existe.';
     if (hasTech(game, owner, id)) return 'Ya la tienes.';
-    const prev = techsOfBranch(t.branch).find(k => TECHS[k].level === t.level - 1);
+    const list = techsOfBranch(t.branch), prev = list[list.indexOf(id) - 1];
     if (prev && !hasTech(game, owner, prev)) return `Antes necesitas ${TECHS[prev].label}.`;
+    for (const k of t.after || []) if (!hasTech(game, owner, k)) return `Antes necesitas ${TECHS[k].label} (rama ${branchLabel(k)}).`;
     if (t.level > 1 && !game.cities.some(c => c.owner === owner && cityLevel(game, null, c) >= t.level)) return `Necesitas una ciudad de nivel ${t.level}.`;
     if (owner !== game.turn) return 'No es tu turno.';
     if (game.players[owner].gold < techCost(game, owner, id)) return `Te falta oro (cuesta ${techCost(game, owner, id)}).`;
     return null;
+  }
+  // Explicación completa de una tecnología: lo que pide, las tropas y edificios que da (con sus cifras) y lo demás.
+  function techDetails(id) {
+    const t = TECHS[id], out = { needs: [], units: [], buildings: [], text: t.text };
+    const list = techsOfBranch(t.branch), prev = list[list.indexOf(id) - 1];
+    if (prev) out.needs.push(`${TECHS[prev].label} (la anterior de la rama)`);
+    for (const k of t.after || []) out.needs.push(`${TECHS[k].label} (rama ${branchLabel(k)})`);
+    if (t.level > 1) out.needs.push(`una ciudad de nivel ${t.level}`);
+    for (const k of Object.keys(UNITS)) {
+      const u = UNITS[k];
+      if (u.tech !== id) continue;
+      let d = `${u.label}: ${u.cost} comida · vida ${u.hp} · ataque ${u.atk} · defensa ${u.def} · mueve ${u.move}` + (u.range > 1 ? ` · alcance ${u.range}` : '');
+      if (u.carry) d += ` · lleva ${u.carry} tropas`;
+      if (u.sea) d += ` · navega por ${u.sea.map(x => (M.TERRAIN[x] || { label: x }).label.toLowerCase()).join(' y ')}`;
+      if (u.needs) d += ` · se recluta en ciudades con ${BUILDINGS[u.needs].label.toLowerCase()}`;
+      const sk = u.skills.filter(x => !['barco'].includes(x)).map(x => `${SKILLS[x].label.toLowerCase()} (${SKILLS[x].text})`);
+      if (sk.length) d += ` · ${sk.join(', ')}`;
+      out.units.push(d);
+    }
+    for (const k of Object.keys(BUILDINGS)) {
+      const b = BUILDINGS[k];
+      if (b.tech !== id) continue;
+      let where = b.big ? 'en una llanura vacía de tu territorio, uno por ciudad' : b.resource ? `donde haya ${(M.RESOURCE[b.resource] || { label: b.resource }).label.toLowerCase()}` : b.terrains ? 'en cualquier casilla de costa o río de tu territorio' : '';
+      if (b.big) {
+        const n = b.nearNeeded === undefined ? 2 : b.nearNeeded;
+        if (n) where += `, con al menos ${n} edificio${n > 1 ? 's' : ''} al lado` + (b.near ? ` (${b.near.map(x => BUILDINGS[x].label.toLowerCase()).join(', ')})` : '');
+        if (b.minLevel) where += `, en ciudades de nivel ${b.minLevel} o más`;
+      }
+      const gives = Object.keys(b.gives).length ? givesText(b.gives) + ' por turno' : '';
+      out.buildings.push(`${b.label}: ${b.cost} oro · ${where}` + (gives ? ` · ${gives}` : '') + (b.extra ? ` · ${b.extra}` : ''));
+    }
+    return out;
   }
   function research(game, owner, id) {
     if (techProblem(game, owner, id)) return null;
@@ -1206,7 +1246,7 @@
     ensure(game);
     for (const k of Object.keys(game.cleared || {})) { const [c, r] = k.split(',').map(Number); const t = M.tileAt(map, c, r); if (t) t.resource = null; }
   }
-  const api = { TECHS, BRANCHES, hasTech, techCost, techProblem, research, techsOfBranch, branchLabel,
+  const api = { techDetails, TECHS, BRANCHES, hasTech, techCost, techProblem, research, techsOfBranch, branchLabel,
     blessTargets, blessProblem, bless, levelNeedsFor, applyCleared, perform, unitById, UNITS, SKILLS, CLASSES, TECH_TERRAIN, ARMIES, GROUND, ECON, BUILDINGS, RECRUITABLE, has, visionOf, newGame, unitAt, reachable, targets, preview, move, attack,
     endTurn, defenseOf, terrainDef, weak, canDoSomething, key,
     cityAt, cityById, ownerOfTile, cityTiles, cityLevel, cityIncome, playerIncome, cityUnits, cityCapacity,

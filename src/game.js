@@ -1132,7 +1132,7 @@
       const box = $('tech-box');
       const esc = (x) => String(x).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]);
       let html = `<h2>Tecnologías de ${esc(nameOf(who))}</h2><p class="small">Oro ${p.gold} · Tienes ${p.techs.length} de ${Object.keys(R.TECHS).length}.`
-        + ' En cada rama se va en orden, y desde el nivel 2 hace falta una ciudad de ese nivel.</p>';
+        + ' En cada rama se va en orden, de izquierda a derecha, y una tecnología de nivel 2 o más pide una ciudad de ese nivel. Algunas piden antes una de otra rama. Toca una para ver todo lo que da.</p>';
       for (const b of R.BRANCHES) {
         html += `<div class="tb"><h3>${b.label}</h3><div class="cards">`;
         for (const id of R.techsOfBranch(b.id)) {
@@ -1151,7 +1151,14 @@
         let d = '';
         if (id) {
           const t = R.TECHS[id], have = R.hasTech(g, who, id), problem = R.techProblem(g, who, id);
-          d = `<b>${esc(t.label)}</b> (${R.branchLabel(id)}, nivel ${t.level}): ${esc(t.text)}.` + (t.later ? ' <i>Esto llega más adelante en el juego.</i>' : '');
+          const x = R.techDetails(id);
+          d = `<b>${esc(t.label)}</b> (rama ${R.branchLabel(id)}, nivel ${t.level}, ${R.techCost(g, who, id)} oro)`;
+          d += '<ul class="td">';
+          if (x.needs.length) d += `<li><b>Pide:</b> ${esc(x.needs.join(', '))}</li>`;
+          x.units.forEach(u => { d += `<li><b>Tropa</b> ${esc(u)}</li>`; });
+          x.buildings.forEach(b => { d += `<li><b>Edificio</b> ${esc(b)}</li>`; });
+          if (x.text) d += `<li>${esc(x.text)}.</li>`;
+          d += '</ul>';
           if (have) d += '<br>✓ Ya la tienes.';
           else if (problem && (canAct || !/turno/.test(problem))) d += `<br>${esc(problem)}`;
           else if (!canAct) d += '<br>Podrás investigarla en tu turno.';
@@ -1165,7 +1172,8 @@
           if (window.PEGame.busy || !window.PEGame.doTech(id)) return;
           ui.showTechs(id);
           $('tech-detail').insertAdjacentHTML('afterbegin', `<div>¡Investigada ${esc(R.TECHS[id].label)}!</div>`);
-          ui.say(`Has investigado ${R.TECHS[id].label}: ${R.TECHS[id].text}.`);
+          const x = R.techDetails(id), what = x.units.map(u => u.split(':')[0]).concat(x.buildings.map(b => b.split(':')[0]));
+          ui.say(`Has investigado ${R.TECHS[id].label}.` + (what.length ? ` Ya puedes: ${what.join(', ').toLowerCase()}.` : '') + (x.text ? ` ${x.text}.` : ''));
         };
       };
       box.querySelectorAll('.tc').forEach(el => { el.onclick = () => ui.showTechs(el.dataset.id); });
